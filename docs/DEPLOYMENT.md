@@ -1,0 +1,344 @@
+# Развёртывание на локальном сервере
+
+Основной вариант — Linux-сервер с Docker Compose: PostgreSQL, приложение, worker уведомлений и Caddy. Наружу публикуется **только TCP 443**. Windows может использовать ту же конфигурацию через Docker Desktop с Linux containers. Быстрый запуск без Docker описан в конце; он служит для разработки, а не HTTPS-публикации.
+
+## 1. Подготовка
+
+Нужны Git, Docker Engine и Compose plugin. Практический старт для небольшой нагрузки: 2–4 CPU, 4 ГБ RAM и SSD с запасом под изображения/аудио; это ориентир, а не измеренная гарантия. Для тысяч книг заранее оцените объём: 10 иллюстраций по 0,5 МБ и 10 MP3 по 2 МБ — примерно 25 МБ на книгу, то есть 250 ГБ на 10 000 книг без бэкапов.
+
+Проверка установленных инструментов:
+
+```bash
+git --version
+docker version
+docker compose version
+```
+
+На Ubuntu установите Docker Engine по официальному руководству: https://docs.docker.com/engine/install/ubuntu/ . На Windows установите Docker Desktop, включите WSL2 и Linux containers, дождитесь запуска движка.
+
+Клонирование:
+
+```bash
+git clone https://github.com/8613344-lang/Portal.git
+cd Portal
+cp .env.example .env
+```
+
+Если репозиторий приватный, используйте обычную авторизацию GitHub/SSH. Не вставляйте токен в URL и не сохраняйте его в файлах проекта.
+
+PowerShell вместо `cp`:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+## 2. Заполните .env
+
+Обязательные секреты: `SECRET_KEY` и `POSTGRES_PASSWORD`. При установленном Python создайте их прямо в файле, не выводя в консоль:
+
+```bash
+python3 -c "from pathlib import Path; import secrets; p=Path('.env'); s=p.read_text(); s=s.replace('SECRET_KEY=\n','SECRET_KEY='+secrets.token_urlsafe(64)+'\n').replace('POSTGRES_PASSWORD=\n','POSTGRES_PASSWORD='+secrets.token_urlsafe(32)+'\n'); p.write_text(s)"
+```
+
+В Windows используйте `py -3` вместо `python3`. Затем откройте `.env` редактором. Файл игнорируется Git; на Linux ограничьте чтение:
+
+```bash
+chmod 600 .env
+```
+
+Настройки локального сервера с именем `books.local`:
+
+```dotenv
+DEBUG=0
+BEHIND_PROXY=1
+DOMAIN=books.local
+CADDY_CONFIG=Caddyfile.local
+ALLOWED_HOSTS=localhost,127.0.0.1,books.local
+CSRF_TRUSTED_ORIGINS=https://books.local
+SITE_URL=https://books.local
+```
+
+`SECRET_KEY` и `POSTGRES_PASSWORD` оставьте с сгенерированными значениями. `POSTGRES_HOST` в `.env` для Docker задавать не нужно: Compose автоматически ставит `db`. `localhost` оставьте в ALLOWED_HOSTS для внутренней проверки состояния контейнера.
+
+На DNS локальной сети создайте запись `books.local` с IP вашего сервера. Альтернатива — hosts-файл на каждом клиенте:
+
+```text
+192.168.1.50 books.local
+```
+
+В Windows hosts находится в `C:\Windows\System32\drivers\etc\hosts`, в Linux — `/etc/hosts`. Используйте фактический IP сервера. Имя `.local` в некоторых сетях используется mDNS; при конфликте можно выбрать `books.home.arpa` и заменить его во всех настройках/DNS.
+
+Для работы только на самом сервере можно оставить `DOMAIN=localhost`, `SITE_URL=https://localhost`, `CSRF_TRUSTED_ORIGINS=https://localhost`.
+
+`SITE_URL` — адрес, который попадёт в email и Telegram. Если указать localhost, сотрудник с другого компьютера не сможет открыть ссылку на ваш сервер.
+
+## 3. Запуск
+
+```bash
+docker compose config --quiet
+docker compose up -d --build
+docker compose ps
+docker compose logs --tail=100 app gateway worker
+```
+
+`app` ждёт готовности PostgreSQL, применяет миграции, собирает статику и запускает Gunicorn. `worker` и `gateway` ждут готовности приложения. Постоянные volumes: `postgres_data`, `private_media`, `caddy_data`, `caddy_config`.
+
+Создайте администратора интерактивно:
+
+```bash
+docker compose exec app python manage.py createsuperuser
+docker compose exec app python manage.py setup_groups
+docker compose exec app python manage.py seed_demo
+```
+
+Демонстрационная книга появится в публичном каталоге. Иллюстрации входят в репозиторий и копируются в приватное хранилище; для обычного `seed_demo` интернет не нужен. Повтор команды сохраняет существующий текст и доступы. Для необязательного скачивания оригиналов, если локальных изображений нет, существует `seed_demo --download-images`.
+
+В браузере откройте `https://books.local` и `/admin/`. Если 443 занят другой службой, остановите конфликтующую службу или разместите приложение за уже имеющимся HTTPS-прокси; не запускайте две службы на одном IP:443.
+
+## 4. Доверие локальному HTTPS
+
+Локальный вариант использует `tls internal`: Caddy создаёт собственный центр сертификации. Чтобы браузеры доверяли серверу, установите **корневой сертификат**, не закрытый ключ, на доверенных клиентских устройствах.
+
+Скопируйте сертификат из работающего контейнера:
+
+```bash
+docker compose cp gateway:/data/caddy/pki/authorities/local/root.crt ./caddy-local-root.crt
+```
+
+Windows (PowerShell, текущий пользователь):
+
+```powershell
+Import-Certificate -FilePath .\caddy-local-root.crt -CertStoreLocation Cert:\CurrentUser\Root
+```
+
+Ubuntu-клиент:
+
+```bash
+sudo cp caddy-local-root.crt /usr/local/share/ca-certificates/books-local.crt
+sudo update-ca-certificates
+```
+
+Firefox может потребовать импорт в собственное хранилище центров сертификации. На телефоне установите этот же корневой сертификат согласно настройкам ОС. Устанавливайте только сертификат собственного сервера; приватный ключ CA не распространяйте. Перезапустите браузер и проверьте сертификат/имя сайта. Не обходите предупреждение браузера для работы с реальными заказами.
+
+Сохранение volume `caddy_data` сохраняет центр и сертификаты после пересоздания контейнера. При потере/пересоздании этого volume клиентам потребуется новый корневой сертификат.
+
+## 5. Публичный домен и внешний порт 443
+
+Если сайт должен быть доступен из интернета, используйте свой настоящий домен, например `books.example.ru`:
+
+```dotenv
+DOMAIN=books.example.ru
+CADDY_CONFIG=Caddyfile.public
+ACME_EMAIL=ваша-почта@example.ru
+ALLOWED_HOSTS=localhost,127.0.0.1,books.example.ru
+CSRF_TRUSTED_ORIGINS=https://books.example.ru
+SITE_URL=https://books.example.ru
+DEBUG=0
+BEHIND_PROXY=1
+```
+
+Настройте DNS A/AAAA на сервер, при необходимости NAT TCP 443 на роутере. Caddy получает сертификат через ACME, в том числе TLS-ALPN challenge на 443, поэтому обязательного проброса 80 в этой конфигурации нет. Порт 80 закрыт; заходить нужно по `https://`, HTTP-перенаправление наружу не предоставляется.
+
+Убедитесь, что провайдер разрешает входящий 443 и нет CGNAT либо используется доступный внешний сервер/маршрут. AAAA должен вести на реально доступный IPv6. Прокси/CDN перед сервером может мешать TLS-ALPN challenge; для первого выпуска сертификата используйте прямой DNS-маршрут либо отдельно настройте DNS challenge.
+
+После смены адреса:
+
+```bash
+docker compose up -d --force-recreate app worker gateway
+```
+
+Не публикуйте порты PostgreSQL и Gunicorn: в Compose у них нет `ports`. Для внешнего доступа нужен только gateway:443. Внутренняя служебная сеть и исходящие соединения SMTP/Telegram остаются отдельными от этого внешнего порта.
+
+HSTS включён для production на год. `HSTS_INCLUDE_SUBDOMAINS=1` и `HSTS_PRELOAD=1` доступны как отдельные переменные только если вы осознанно переводите все поддомены своего домена на постоянный HTTPS. По умолчанию они выключены; `check --deploy` сообщает два соответствующих предупреждения. Не включайте preload на локальном или общем домене только ради удаления предупреждения.
+
+## 6. Почта
+
+В `.env` укажите SMTP-сервис и проверенный адрес отправителя:
+
+```dotenv
+EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend
+EMAIL_HOST=smtp.example.ru
+EMAIL_PORT=587
+EMAIL_HOST_USER=books@example.ru
+EMAIL_HOST_PASSWORD=пароль-приложения-SMTP
+EMAIL_USE_TLS=1
+EMAIL_USE_SSL=0
+DEFAULT_FROM_EMAIL=books@example.ru
+```
+
+Для провайдера с implicit TLS на 465 используйте `EMAIL_PORT=465`, `EMAIL_USE_TLS=0`, `EMAIL_USE_SSL=1`. Не включайте одновременно оба режима. Настройте SPF/DKIM у почтового провайдера и разрешите исходящий SMTP-порт на сервере.
+
+В админке откройте **Получатели уведомлений → Добавить**: имя, канал Email, адрес, активность. Заказы после этого создают задачу доставки этому адресату.
+
+```bash
+docker compose up -d --force-recreate app worker
+```
+
+Отправьте тестовую заявку. Проверьте «Заказы» и «Уведомления»: сначала `В очереди`, затем `Отправлено`. При отказе будет следующая попытка; после восьми неудач — `Ошибка`. Для повторения исправьте настройки, выберите неудачные уведомления и действие «Повторить неудачные уведомления».
+
+Получатели добавленные после заявки не получают её автоматически. Сама заявка видна в админке независимо от наличия получателей.
+
+## 7. Telegram
+
+1. Через официальный `@BotFather` создайте бота и получите токен.
+2. Укажите `TELEGRAM_BOT_TOKEN` в `.env`; это серверный секрет, его не нужно вставлять в HTML или GitHub.
+3. Пересоздайте `app` и `worker` командой выше.
+4. Каждый сотрудник открывает личный чат с ботом и отправляет `/start`. Пока доступ не выдан, бот ответит его числовым Telegram ID без данных заказов.
+5. В админке создайте/выберите учётную запись сотрудника: **Активен**, **Статус персонала**, группа **Менеджеры заказов** либо суперпользователь.
+6. В «Получатели уведомлений» создайте запись: канал Telegram, положительный числовой ID, связанный сотрудник, активность.
+7. Сотрудник повторяет `/start`; затем `/orders` показывает ссылки на пять последних заявок. Для карточки и фотографии потребуется вход в админку.
+
+Не используйте username как идентификатор разрешения. Эта версия работает с личными чатами, не с групповыми ID. Отключение получателя/сотрудника или отзыв `view_order` блокирует команды и ожидающие уведомления.
+
+Используется polling: входящий webhook не нужен. Если токен раньше использовался другим приложением с webhook, удалите webhook через Bot API, сохранив токен вне истории команд, либо создайте отдельного бота. Должен работать **один** экземпляр worker, опрашивающий этот токен, иначе Telegram может возвращать конфликт.
+
+## 8. Книги, доступы и заказы
+
+**Новая книга:** `/admin/library/book/` → Добавить. Название, slug латиницей, описание, обложка, возраст, видимость, состояние. Во встроенных «Страницах» добавляйте позиции 1, 2, 3… с заголовками, текстом и файлами. Абзацы разделяйте пустой строкой; HTML отображается как текст.
+
+Изображения: JPEG/PNG/WebP до 10 МБ/25 мегапикселей. Аудио: настоящий MP3/WAV до 100 МБ. На странице просмотрщика редактор может отдельно сохранить или удалить запись. Обычный читатель видит только проигрыватель. При переключении страницы предыдущая запись останавливается вместе с закрытием страницы.
+
+**Персональная книга:** видимость «Для выбранных пользователей», состояние «Опубликована», добавьте нужных читателей в «Доступы к книгам». Черновик не виден клиенту даже с выданным доступом. **Публичная книга:** «Публичная» и «Опубликована»; публикацию детских персональных материалов отдельно согласуйте с родителем.
+
+**Сотрудники:** `setup_groups` создаёт «Редакторы книг» и «Менеджеры заказов». У сотрудника также должны быть «Активен» и «Статус персонала». Не делайте всех сотрудников суперпользователями. Изменять пользователей, выдавать административные роли и управлять получателями должен администратор.
+
+**Заказы:** статусы «Новая», «В работе», «На согласовании», «Готова», «Завершена», «Отменена». Назначьте менеджера, готовую книгу и пользователя. В списке заказов выберите нужные и действие «Выдать заказчикам доступ к готовым книгам». Оно требует права добавления доступа; сама книга также должна быть опубликована.
+
+Заказ без входа хранится как гостевой. Сначала подтвердите принадлежность аккаунта заказчику, затем назначайте поле «Заказчик». Одного совпадения email недостаточно: регистрация не подтверждает почтовый адрес автоматически. Если человек забыл пароль, администратор после проверки личности задаёт новый через штатную админку; сам читатель меняет известный пароль в кабинете.
+
+Перед публичной эксплуатацией заполните политику `templates/library/privacy.html`: реквизиты владельца, контакт для обращений, сроки хранения и удаления материалов. Удаление из рабочей базы должно учитывать фото на диске и срок хранения резервных копий.
+
+## 9. Импорт большого числа книг
+
+Формат — один объект книги или массив объектов. Образец: `data/import-example.json`. `cover`, `illustration`, `audio` — относительные пути внутри `assets-dir`. По умолчанию новые книги — закрытые черновики. Повторяющиеся slug пропускаются без изменения существующих прав/контента. Чтобы изменить уже созданную книгу, используйте админку.
+
+Положите JSON и файлы на сервер, скопируйте во временный каталог контейнера:
+
+```bash
+docker compose cp ./import-batch app:/tmp/import-batch
+docker compose exec app python manage.py import_books /tmp/import-batch/books.json --assets-dir /tmp/import-batch/assets
+```
+
+Исходные файлы из `/tmp` копируются в постоянное приватное хранилище. Путь файла не может выходить за `assets-dir`. Проверяются модели и форматы файлов; каждая книга сохраняется отдельной транзакцией. Неверная книга останавливает импорт; ранее успешно импортированные остаются. После исправления можно повторить команду — существующие slug будут пропущены.
+
+Нестандартные React/JSX-проекты сначала нужно привести к этой JSON-схеме. Произвольный JavaScript в книги не импортируется и не выполняется.
+
+## 10. Обновление
+
+Сначала сделайте резервную копию. Затем:
+
+```bash
+git pull --ff-only
+docker compose up -d --build
+docker compose exec app python manage.py check
+docker compose ps
+```
+
+Миграции применяются автоматически. Volumes переживают пересоздание контейнеров. **Не выполняйте `docker compose down -v` на рабочем сервере:** `-v` удаляет постоянные данные. Обычный `docker compose down` останавливает службы, сохраняя volumes.
+
+## 11. Резервное копирование
+
+Сохраняйте базу, приватное медиа, `.env` и CA/certificates Caddy. Ни один из этих файлов не публикуйте в GitHub. Для согласованной копии временно остановите app/worker; gateway в это время может отдавать ошибку недоступности.
+
+Linux shell, из папки проекта:
+
+```bash
+mkdir -p backups
+chmod 700 backups
+docker compose stop app worker
+docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > backups/portal.dump
+docker compose run --rm --no-deps -T --entrypoint tar app -czf - -C /app/media . > backups/media.tar.gz
+docker compose exec -T gateway tar -czf - -C /data . > backups/caddy-data.tar.gz
+cp .env backups/server.env
+chmod 600 backups/*
+docker compose start app worker
+```
+
+Проверьте ненулевой размер файлов и успешный выход каждой команды. Перенесите копию в отдельное защищённое хранилище. Для датированных копий создавайте отдельную папку; эти примеры перезаписывают одноимённые файлы. Автоматизация бэкапов должна возобновлять app/worker даже при ошибке копирования.
+
+В Windows PowerShell 5 не используйте `>` для бинарного `pg_dump`/tar: он может изменить поток. Выполните backup-команды в WSL/bash либо создайте архивы внутри контейнеров и заберите их через `docker compose cp`.
+
+## 12. Восстановление
+
+Проверяйте восстановление сначала на отдельной машине/проекте Compose. Копируйте соответствующий `.env`, используйте тот же совместимый код/схему. Настройте имя/адрес тестового окружения отдельно от рабочего и выключите реальные email/Telegram-получатели, чтобы не повторить уведомления.
+
+Для пустого целевого PostgreSQL и тома медиа:
+
+```bash
+docker compose up -d db
+docker compose exec -T db sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists --no-owner' < backups/portal.dump
+docker compose run --rm --no-deps -T --entrypoint tar app -xzf - -C /app/media < backups/media.tar.gz
+docker compose up -d --build
+```
+
+`--clean` заменяет объекты целевой базы: применяйте только к предназначенному для восстановления окружению. Если нужно сохранить локальный CA, восстановите `/data` Caddy из его соответствующего архива при остановленном gateway; иначе будет создан новый CA и клиентам потребуется снова доверить сертификат.
+
+Проверьте пользователей, закрытые доступы, заказ, иллюстрацию и аудио по [TESTING.md](TESTING.md). Настройте периодичность копирования под допустимую потерю данных и храните несколько поколений копий.
+
+## 13. Быстрый запуск без Docker
+
+Linux с Python 3.12:
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+```
+
+Для разработки поставьте в `.env`: `DEBUG=1`, `BEHIND_PROXY=0`, `SITE_URL=http://127.0.0.1:8000`, `ALLOWED_HOSTS=localhost,127.0.0.1`. Задайте SECRET_KEY, не задавайте POSTGRES_HOST. Будет использована SQLite в `db.sqlite3`.
+
+```bash
+python manage.py migrate
+python manage.py collectstatic --noinput
+python manage.py createsuperuser
+python manage.py setup_groups
+python manage.py seed_demo
+python manage.py runserver 127.0.0.1:8000
+```
+
+В другом терминале с активированной виртуальной средой:
+
+```bash
+python manage.py run_notifications
+```
+
+Windows PowerShell:
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+Copy-Item .env.example .env
+# Отредактируйте .env для локальной разработки, как описано выше.
+.\.venv\Scripts\python.exe manage.py migrate
+.\.venv\Scripts\python.exe manage.py collectstatic --noinput
+.\.venv\Scripts\python.exe manage.py createsuperuser
+.\.venv\Scripts\python.exe manage.py setup_groups
+.\.venv\Scripts\python.exe manage.py seed_demo
+.\.venv\Scripts\python.exe -m waitress --listen=127.0.0.1:8000 portal.wsgi:application
+```
+
+Worker запускается отдельно: `.\.venv\Scripts\python.exe manage.py run_notifications`. Откройте `http://127.0.0.1:8000`. Этот способ не включает HTTPS и production-проверку PostgreSQL; для рабочего сервера используйте основной Docker-вариант.
+
+## 14. Диагностика
+
+```bash
+docker compose ps
+docker compose logs --tail=100 app
+docker compose logs --tail=100 worker
+docker compose logs --tail=100 gateway
+docker compose exec app python manage.py check
+docker compose exec app python manage.py check --deploy
+```
+
+- **400 / DisallowedHost:** добавьте точное имя в ALLOWED_HOSTS, пересоздайте app.
+- **403 CSRF:** проверьте `https://` и CSRF_TRUSTED_ORIGINS, актуальность cookie, работу gateway и BEHIND_PROXY=1.
+- **502:** приложение не готово; проверьте app/db health, миграции и SECRET_KEY.
+- **Сертификат:** проверьте DNS/имя, доверие локальному CA или доступность публичного 443.
+- **Книга 404:** проверьте published и права читателя; наличие аккаунта само не открывает закрытые книги.
+- **Нет уведомления:** проверьте получателей, worker, состояния задач, SMTP и Telegram. Заявка остаётся в «Заказах».
+- **WAV/MP3 отклонён:** расширение и содержимое должны соответствовать; экспортируйте нормальный аудиофайл до 100 МБ.
+- **Сбой фото:** используйте JPEG/PNG/WebP в допустимом размере.
+- **Docker не соединяется с daemon:** запустите Docker Engine/Desktop и повторите проверку `docker version`.
+
+Документация: [Django deployment checklist](https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/), [Caddy HTTPS](https://caddyserver.com/docs/automatic-https), [Telegram Bot API](https://core.telegram.org/bots/api).

@@ -1,0 +1,136 @@
+import uuid
+from pathlib import Path
+from django.conf import settings
+from django.db import models
+from django.db.models import Q
+from django.utils import timezone
+from .validators import normalize_image, validate_audio
+
+def private_path(instance, filename):
+    suffix = Path(filename).suffix.lower()
+    return f'{instance._meta.model_name}/{uuid.uuid4().hex}{suffix}'
+
+class BookQuerySet(models.QuerySet):
+    def visible_to(self, user):
+        if user.is_authenticated and user.is_staff and user.has_perm('library.view_book'):
+            return self
+        query = Q(status='published', visibility='public')
+        if user.is_authenticated:
+            query |= Q(status='published', grants__user=user)
+        return self.filter(query).distinct()
+
+class Book(models.Model):
+    title = models.CharField('Название', max_length=200)
+    slug = models.SlugField('Адрес', max_length=120, unique=True)
+    description = models.TextField('Описание', blank=True)
+    child_name = models.CharField('Имя героя', max_length=100, blank=True)
+    age_label = models.CharField('Возраст читателей', max_length=60, default='Для детей от 2 до 5 лет')
+    cover = models.FileField('Обложка', upload_to=private_path, blank=True)
+    status = models.CharField('Состояние', max_length=20, choices=[('draft', 'Черновик'), ('published', 'Опубликована'), ('archived', 'В архиве')], default='draft', db_index=True)
+    visibility = models.CharField('Доступ', max_length=20, choices=[('public', 'Публичная'), ('restricted', 'Для выбранных пользователей')], default='restricted', db_index=True)
+    created_at = models.DateTimeField('Создана', auto_now_add=True)
+    objects = BookQuerySet.as_manager()
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Книга'
+        verbose_name_plural = 'Книги'
+    def __str__(self): return self.title
+    def clean(self): self.cover = normalize_image(self.cover)
+
+class BookPage(models.Model):
+    book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name='pages', verbose_name='Книга')
+    position = models.PositiveIntegerField('Номер страницы')
+    title = models.CharField('Заголовок', max_length=200)
+    text = models.TextField('Текст', blank=True, help_text='Абзацы разделяйте пустой строкой. HTML не поддерживается.')
+    illustration = models.FileField('Иллюстрация', upload_to=private_path, blank=True)
+    audio = models.FileField('Озвучка MP3 / WAV', upload_to=private_path, blank=True, validators=[validate_audio])
+    class Meta:
+        ordering = ['position']
+        constraints = [models.UniqueConstraint(fields=['book', 'position'], name='unique_book_page')]
+        verbose_name = 'Страница книги'
+        verbose_name_plural = 'Страницы книг'
+    def __str__(self): return f'{self.book}: {self.position}. {self.title}'
+    def clean(self): self.illustration = normalize_image(self.illustration)
+
+class BookAccess(models.Model):
+    book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name='grants', verbose_name='Книга')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='book_grants', verbose_name='Читатель')
+    created_at = models.DateTimeField(auto_now_add=True)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['book', 'user'], name='unique_book_access')]
+        verbose_name = 'Доступ к книге'
+        verbose_name_plural = 'Доступы к книгам'
+    def __str__(self): return f'{self.user} → {self.book}'
+
+class Order(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    submission_key = models.UUIDField(unique=True, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, verbose_name='Заказчик')
+    parent_name = models.CharField('Имя родителя', max_length=120)
+    email = models.EmailField('Email')
+    contact = models.CharField('Дополнительная связь', max_length=160, blank=True)
+    child_name = models.CharField('Имя ребёнка', max_length=100)
+    child_age = models.PositiveSmallIntegerField('Возраст')
+    child_description = models.TextField('О ребёнке')
+    event = models.TextField('Событие / тема')
+    wishes = models.TextField('Пожелания', blank=True)
+    photo = models.FileField('Фото ребёнка', upload_to=private_path, blank=True)
+    consent = models.BooleanField('Согласие на обработку', default=False)
+    status = models.CharField('Статус', max_length=20, choices=[('new', 'Новая'), ('in_progress', 'В работе'), ('review', 'На согласовании'), ('ready', 'Готова'), ('completed', 'Завершена'), ('cancelled', 'Отменена')], default='new', db_index=True)
+    book = models.ForeignKey(Book, null=True, blank=True, on_delete=models.SET_NULL, verbose_name='Готовая книга')
+    manager = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='managed_orders', verbose_name='Менеджер', limit_choices_to={'is_staff': True})
+    created_at = models.DateTimeField('Получена', auto_now_add=True)
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Заказ'
+        verbose_name_plural = 'Заказы'
+    def __str__(self): return f'Заказ {str(self.id)[:8]} — {self.parent_name}'
+    def clean(self): self.photo = normalize_image(self.photo)
+
+class NotificationRecipient(models.Model):
+    name = models.CharField('Имя получателя', max_length=100)
+    channel = models.CharField('Канал', max_length=12, choices=[('email', 'Email'), ('telegram', 'Telegram')])
+    destination = models.CharField('Email или Telegram user ID', max_length=254)
+    active = models.BooleanField('Активен', default=True)
+    employee = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.CASCADE, verbose_name='Сотрудник', limit_choices_to={'is_staff': True}, help_text='Обязательно для Telegram: нужен активный сотрудник с правом просмотра заказов.')
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['channel', 'destination'], name='unique_recipient')]
+        verbose_name = 'Получатель уведомлений'
+        verbose_name_plural = 'Получатели уведомлений'
+    def __str__(self): return self.name
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        from django.core.validators import validate_email
+        if self.channel == 'email':
+            validate_email(self.destination)
+        elif self.channel == 'telegram':
+            if not self.destination.isdecimal() or int(self.destination) <= 0:
+                raise ValidationError({'destination': 'Нужен положительный числовой Telegram user ID, не username.'})
+            if not self.employee_id or not self.employee.is_staff or not self.employee.is_active or not self.employee.has_perm('library.view_order'):
+                raise ValidationError({'employee': 'Нужен активный сотрудник с правом просмотра заказов.'})
+    def allowed(self):
+        return self.active and (self.channel == 'email' or bool(self.employee_id and self.employee.is_active and self.employee.is_staff and self.employee.has_perm('library.view_order')))
+
+class Notification(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='notifications', verbose_name='Заказ')
+    recipient = models.ForeignKey(NotificationRecipient, on_delete=models.PROTECT, verbose_name='Получатель')
+    destination = models.CharField(max_length=254)
+    channel = models.CharField(max_length=12)
+    state = models.CharField('Состояние', max_length=12, choices=[('pending', 'В очереди'), ('sending', 'Отправляется'), ('sent', 'Отправлено'), ('failed', 'Ошибка'), ('cancelled', 'Отменено')], default='pending', db_index=True)
+    attempts = models.PositiveIntegerField('Попыток', default=0)
+    next_attempt = models.DateTimeField('Следующая попытка', default=timezone.now, db_index=True)
+    lease_token = models.UUIDField(null=True, blank=True)
+    last_error = models.CharField('Ошибка', max_length=250, blank=True)
+    sent_at = models.DateTimeField('Отправлено', null=True, blank=True)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['order', 'recipient'], name='unique_order_notification')]
+        verbose_name = 'Уведомление'
+        verbose_name_plural = 'Уведомления'
+
+class BotState(models.Model):
+    name = models.CharField(max_length=40, primary_key=True)
+    offset = models.BigIntegerField(default=0)
+
+class RateEvent(models.Model):
+    key = models.CharField(max_length=64, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)

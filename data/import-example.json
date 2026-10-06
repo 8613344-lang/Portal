@@ -1,0 +1,13 @@
+{
+  "slug": "my-first-book",
+  "title": "Моя первая история",
+  "description": "История о маленьком открытии",
+  "child_name": "Маша",
+  "status": "draft",
+  "visibility": "restricted",
+  "cover": "cover.jpg",
+  "pages": [
+    {"title": "Однажды утром", "text": "Первый абзац.\n\nВторой абзац.", "illustration": "page-01.jpg", "audio": "page-01.mp3"},
+    {"title": "Новое открытие", "text": "Продолжение истории.", "illustration": "page-02.png", "audio": "page-02.wav"}
+  ]
+}
