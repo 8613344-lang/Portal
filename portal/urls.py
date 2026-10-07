@@ -8,6 +8,7 @@ urlpatterns = [
     path('', views.home, name='home'),
     path('books/', views.catalog, name='catalog'),
     path('books/<slug:slug>/', views.reader, name='reader'),
+    path('books/<slug:slug>/download/<str:format>/', views.export_book, name='book-export'),
     path('pages/<int:pk>/audio/', views.page_audio, name='page-audio'),
     path('account/', views.account, name='account'),
     path('order/', views.order_create, name='order'),

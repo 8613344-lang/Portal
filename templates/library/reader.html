@@ -1,1 +1,36 @@
-{% extends 'base.html' %}{% block title %}{{ book.title }} · Книги рядом{% endblock %}{% block content %}<section class="reader-shell"><div class="reader-top"><a class="text-link" href="{% if user.is_authenticated %}{% url 'account' %}{% else %}{% url 'catalog' %}{% endif %}">← К книгам</a><span>{{ book.title }}</span><button class="text-link print-button" type="button">Печать страницы</button></div>{% if current %}<div class="reader-layout"><aside class="contents"><p class="eyebrow">СОДЕРЖАНИЕ</p><ol>{% for page in pages %}<li><a class="{% if page.pk == current.pk %}active{% endif %}" href="?page={{ forloop.counter }}"><span>{{ forloop.counter|stringformat:'02d' }}</span>{{ page.title }}</a></li>{% endfor %}</ol></aside><div class="reader-main"><article class="reading-page"><p class="eyebrow">СТРАНИЦА {{ number }} / {{ total }}</p><h1>{{ current.title }}</h1>{% if current.illustration %}<img class="page-illustration" src="{{ current.illustration.url }}" alt="{{ current.title }}">{% endif %}<div class="story-text">{{ current.text|linebreaks }}</div></article><section class="audio-panel" id="page-audio"><div><span class="audio-symbol">♫</span><div><h2>Послушать страницу</h2><p>{% if current.audio %}{{ current.title }}{% else %}Для этой страницы запись ещё не добавлена{% endif %}</p></div></div>{% if current.audio %}<audio controls preload="metadata" src="{{ current.audio.url }}" aria-label="Озвучка: {{ current.title }}"></audio>{% endif %}{% if can_edit %}<details class="audio-edit"><summary>{% if current.audio %}Заменить запись{% else %}Добавить MP3 / WAV{% endif %}</summary><form method="post" action="{% url 'page-audio' current.pk %}" enctype="multipart/form-data">{% csrf_token %}{{ audio_form.as_p }}<p class="muted">MP3 или WAV до 100 МБ. Запись сохранится для всех читателей этой книги.</p><button class="button primary">Сохранить запись</button></form>{% if current.audio %}<form method="post" action="{% url 'page-audio' current.pk %}">{% csrf_token %}<input type="hidden" name="action" value="remove"><button class="text-link danger">Удалить запись</button></form>{% endif %}</details>{% endif %}</section><nav class="page-navigation" aria-label="Страницы книги">{% if number > 1 %}<a class="button secondary" href="?page={{ previous }}">← Предыдущая</a>{% else %}<span></span>{% endif %}<span>{{ number }} / {{ total }}</span>{% if number < total %}<a class="button primary" href="?page={{ next }}">Следующая →</a>{% else %}<a class="button secondary" href="{% url 'catalog' %}">Другие истории ↗</a>{% endif %}</nav></div></div>{% else %}<div class="empty">Страницы этой книги ещё готовятся.</div>{% endif %}</section>{% endblock %}
+{% extends 'base.html' %}
+{% block title %}{{ book.title }} · Книги рядом{% endblock %}
+{% block content %}
+<section class="reader-shell" data-book-reader data-number="{{ number }}" data-total="{{ total }}">
+  <div class="reader-top">
+    <a class="text-link" href="{% if user.is_authenticated %}{% url 'account' %}{% else %}{% url 'catalog' %}{% endif %}">← К книгам</a>
+    <span>{{ book.title }}</span><button class="text-link print-button" type="button">Печать страницы</button>
+  </div>
+  <div class="book-tools">
+    <div class="book-downloads">
+      <a class="button secondary" href="{% url 'book-export' book.slug 'pdf' %}">Скачать книгу PDF</a>
+      {% if audio_count %}<a class="button secondary" href="{% url 'book-export' book.slug 'mp3' %}">Скачать аудиокнигу MP3</a>{% endif %}
+      <p class="muted">PDF: обложка, иллюстрации и QR-код сайта. {% if audio_count %}В MP3 войдут записи {{ audio_count }} из {{ total }} страниц по порядку.{% else %}Для MP3 сначала добавьте записи страниц.{% endif %}</p>
+    </div>
+    {% if current %}<div class="auto-reader">
+      <button class="button primary" id="auto-toggle" type="button" aria-pressed="false">▶ Автоматическое чтение</button>
+      <label for="page-delay">Страница без аудио: <input id="page-delay" type="number" min="3" max="300" value="15"> сек.</label>
+      <p class="muted" id="auto-status" role="status">С записью — переход после её окончания. Без записи — по таймеру.</p>
+    </div>{% endif %}
+  </div>
+  {% if current %}
+  <div class="reader-layout">
+    <aside class="contents"><p class="eyebrow">СОДЕРЖАНИЕ</p><ol>{% for page in pages %}<li><a class="{% if page.pk == current.pk %}active{% endif %}" href="?page={{ forloop.counter }}"><span>{{ forloop.counter|stringformat:'02d' }}</span>{{ page.title }}</a></li>{% endfor %}</ol></aside>
+    <div class="reader-main">
+      <article class="reading-page"><p class="eyebrow">СТРАНИЦА {{ number }} / {{ total }}</p><h1>{{ current.title }}</h1>{% if current.illustration %}<img class="page-illustration" src="{{ current.illustration.url }}" alt="{{ current.title }}">{% endif %}<div class="story-text">{{ current.text|linebreaks }}</div></article>
+      <section class="audio-panel" id="page-audio">
+        <div><span class="audio-symbol">♫</span><div><h2>Послушать страницу</h2><p>{% if current.audio %}{{ current.title }}{% else %}Для этой страницы запись ещё не добавлена{% endif %}</p></div></div>
+        {% if current.audio %}<audio controls preload="metadata" src="{{ current.audio.url }}" aria-label="Озвучка: {{ current.title }}"></audio>{% endif %}
+        {% if can_edit %}<details class="audio-edit"><summary>{% if current.audio %}Заменить запись{% else %}Добавить MP3 / WAV{% endif %}</summary><form method="post" action="{% url 'page-audio' current.pk %}" enctype="multipart/form-data">{% csrf_token %}{{ audio_form.as_p }}<p class="muted">MP3 или WAV до 100 МБ. Запись сохранится для всех читателей этой книги.</p><button class="button primary">Сохранить запись</button></form>{% if current.audio %}<form method="post" action="{% url 'page-audio' current.pk %}">{% csrf_token %}<input type="hidden" name="action" value="remove"><button class="text-link danger">Удалить запись</button></form>{% endif %}</details>{% endif %}
+      </section>
+      <nav class="page-navigation" aria-label="Страницы книги">{% if number > 1 %}<a class="button secondary" href="?page={{ previous }}">← Предыдущая</a>{% else %}<span></span>{% endif %}<span>{{ number }} / {{ total }}</span>{% if number < total %}<a class="button primary" href="?page={{ next }}">Следующая →</a>{% else %}<a class="button secondary" href="{% url 'catalog' %}">Другие истории ↗</a>{% endif %}</nav>
+    </div>
+  </div>
+  {% else %}<div class="empty">Страницы этой книги ещё готовятся.</div>{% endif %}
+</section>
+{% endblock %}

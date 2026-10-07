@@ -1,6 +1,8 @@
 import tempfile
 import uuid
 import wave
+import subprocess
+from pathlib import Path
 from io import BytesIO
 from unittest.mock import patch
 from django.contrib.auth.models import Permission, User
@@ -46,6 +48,92 @@ class PlatformTests(TestCase):
         self.page = BookPage.objects.create(book=self.private, position=1, title='Личная страница', text='Секретный текст', audio=wav_file(), illustration=image_file())
         BookPage.objects.create(book=self.public, position=1, title='Открытая страница', text='Добрая история')
         BookAccess.objects.create(book=self.private, user=self.a)
+
+    def test_exports_deny_private_and_draft_without_access(self):
+        for format in ('pdf', 'mp3'):
+            for book in (self.private, self.draft):
+                self.assertEqual(self.client.get(reverse('book-export', args=[book.slug, format])).status_code, 404)
+        self.client.force_login(self.b)
+        self.assertEqual(self.client.get(reverse('book-export', args=[self.private.slug, 'pdf'])).status_code, 404)
+
+    @override_settings(SITE_URL='https://books.example.test')
+    def test_pdf_contains_cyrillic_all_text_final_project_link_and_no_cache(self):
+        from pypdf import PdfReader
+        self.client.force_login(self.a)
+        response = self.client.get(reverse('book-export', args=[self.private.slug, 'pdf']))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('no-store', response['Cache-Control'])
+        self.assertIn('attachment', response['Content-Disposition'])
+        pdf = PdfReader(BytesIO(b''.join(response.streaming_content)))
+        response.close()
+        self.assertEqual(len(pdf.pages), 3)
+        self.assertIn('Секретная книга', pdf.pages[0].extract_text())
+        self.assertIn('Секретный текст', pdf.pages[1].extract_text())
+        self.assertIn('https://books.example.test/', pdf.pages[-1].extract_text())
+        fonts = pdf.pages[1]['/Resources']['/Font'].get_object()
+        self.assertTrue(any('/FontFile2' in font.get_object().get('/FontDescriptor', {}) for font in fonts.values()))
+
+    def test_pdf_long_text_is_preserved_across_pages(self):
+        from pypdf import PdfReader
+        from .exports import book_pdf
+        self.page.text = ('Длинная история ребёнка. ' * 500) + 'Последняя строка истории.'
+        output = book_pdf(self.private, [self.page])
+        pdf = PdfReader(output)
+        self.assertGreater(len(pdf.pages), 3)
+        self.assertIn('Последняя строка истории.', '\n'.join(p.extract_text() for p in pdf.pages))
+        output.close()
+
+    def test_export_access_revocation_and_invalid_format(self):
+        self.client.force_login(self.a)
+        BookAccess.objects.filter(book=self.private).delete()
+        self.assertEqual(self.client.get(reverse('book-export', args=[self.private.slug, 'pdf'])).status_code, 404)
+        self.assertEqual(self.client.get(reverse('book-export', args=[self.public.slug, 'zip'])).status_code, 404)
+
+    def test_mp3_without_recordings_returns_clear_error(self):
+        response = self.client.get(reverse('book-export', args=[self.public.slug, 'mp3']))
+        self.assertEqual(response.status_code, 422)
+        self.assertContains(response, 'нет аудиозаписей', status_code=422)
+
+    def test_mp3_real_merge_of_different_mp3_and_wav_in_page_order(self):
+        import imageio_ffmpeg
+        from mutagen.mp3 import MP3
+        with tempfile.TemporaryDirectory() as directory:
+            first = Path(directory) / 'first.mp3'
+            subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), '-nostdin', '-y', '-loglevel', 'error',
+                            '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', '-ar', '22050',
+                            '-c:a', 'libmp3lame', str(first)], check=True, capture_output=True)
+            BookPage.objects.create(book=self.public, position=2, title='Вторая', audio=wav_file())
+            page = self.public.pages.get(position=1)
+            page.audio.save('first.mp3', SimpleUploadedFile('first.mp3', first.read_bytes()))
+            BookPage.objects.create(book=self.public, position=3, title='Без записи')
+            response = self.client.get(reverse('book-export', args=[self.public.slug, 'mp3']))
+            self.assertEqual(response.status_code, 200)
+            content = b''.join(response.streaming_content)
+            response.close()
+            info = MP3(BytesIO(content)).info
+            self.assertAlmostEqual(info.length, 2, delta=0.2)
+            self.assertEqual(info.sample_rate, 44100)
+            joined = Path(directory) / 'joined.mp3'
+            joined.write_bytes(content)
+            decoded = subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), '-nostdin', '-loglevel', 'error',
+                                      '-i', str(joined), '-f', 's16le', '-ac', '1', '-ar', '8000', '-'],
+                                     check=True, capture_output=True).stdout
+            import array
+            samples = array.array('h', decoded)
+            self.assertGreater(sum(abs(x) for x in samples[1600:6400]), 100000)
+            self.assertLess(sum(abs(x) for x in samples[10000:14000]), 10000)
+
+    def test_reader_shows_exports_auto_reader_and_missing_audio_count(self):
+        response = self.client.get(reverse('reader', args=[self.public.slug]))
+        self.assertContains(response, 'Скачать книгу PDF')
+        self.assertContains(response, 'Страница без аудио:')
+        self.assertNotContains(response, 'Скачать аудиокнигу MP3')
+
+    def test_export_busy_returns_retry_after(self):
+        with patch('library.exports.export_slots.acquire', return_value=False):
+            response = self.client.get(reverse('book-export', args=[self.public.slug, 'pdf']))
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response['Retry-After'], '10')
     def order_data(self):
         return {'parent_name': 'Родитель', 'email': 'parent@example.com', 'child_name': 'Дима', 'child_age': '3', 'child_description': 'Любит строить', 'event': 'Первый поход', 'wishes': '', 'consent': 'on'}
     def submit(self, **extra):

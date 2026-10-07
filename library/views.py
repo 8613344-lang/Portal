@@ -50,7 +50,32 @@ def reader(request, slug):
     number = max(1, min(number, len(pages)))
     current = pages[number - 1] if pages else None
     can_edit = request.user.is_authenticated and request.user.is_staff and request.user.has_perm('library.change_bookpage')
-    return render(request, 'library/reader.html', {'book': book, 'pages': pages, 'current': current, 'number': number, 'total': len(pages), 'previous': number - 1, 'next': number + 1, 'can_edit': can_edit, 'audio_form': PageAudioForm()})
+    return render(request, 'library/reader.html', {'book': book, 'pages': pages, 'current': current, 'number': number, 'total': len(pages), 'previous': number - 1, 'next': number + 1, 'can_edit': can_edit, 'audio_form': PageAudioForm(), 'audio_count': sum(bool(p.audio) for p in pages)})
+
+@never_cache
+@require_http_methods(['GET'])
+def export_book(request, slug, format):
+    from .exports import ExportError, book_pdf, book_mp3, export_slots
+    book = get_object_or_404(Book.objects.visible_to(request.user), slug=slug)
+    if format not in ('pdf', 'mp3'): raise Http404
+    if not export_slots.acquire(blocking=False):
+        response = HttpResponse('Выгрузки заняты. Повторите попытку через несколько секунд.', status=503, content_type='text/plain; charset=utf-8')
+        response['Retry-After'] = '10'
+        return response
+    try:
+        pages = list(book.pages.all())
+        output = book_pdf(book, pages) if format == 'pdf' else book_mp3(book, pages)
+        response = FileResponse(output, as_attachment=True, filename=f'{book.slug}.{format}',
+                                content_type='application/pdf' if format == 'pdf' else 'audio/mpeg')
+        response['Cache-Control'] = 'private, no-store'
+        response['X-Content-Type-Options'] = 'nosniff'
+        return response
+    except ExportError as error:
+        return HttpResponse(str(error), status=422, content_type='text/plain; charset=utf-8')
+    except (OSError, ValueError):
+        return HttpResponse('Не удалось прочитать файлы книги. Обратитесь к администратору.', status=422, content_type='text/plain; charset=utf-8')
+    finally:
+        export_slots.release()
 
 @require_POST
 @login_required
