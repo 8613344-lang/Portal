@@ -31,7 +31,9 @@ class PlatformTests(TestCase):
     @classmethod
     def setUpClass(cls):
         cls.media = tempfile.TemporaryDirectory()
-        cls.media_override = override_settings(MEDIA_ROOT=cls.media.name)
+        static_root = Path(cls.media.name) / 'static'
+        static_root.mkdir()
+        cls.media_override = override_settings(MEDIA_ROOT=cls.media.name, STATIC_ROOT=static_root)
         cls.media_override.enable()
         super().setUpClass()
     @classmethod
@@ -73,14 +75,37 @@ class PlatformTests(TestCase):
         fonts = pdf.pages[1]['/Resources']['/Font'].get_object()
         self.assertTrue(any('/FontFile2' in font.get_object().get('/FontDescriptor', {}) for font in fonts.values()))
 
-    def test_pdf_long_text_is_preserved_across_pages(self):
+    def test_pdf_long_text_fits_exactly_one_leaf_with_large_picture(self):
         from pypdf import PdfReader
         from .exports import book_pdf
-        self.page.text = ('Длинная история ребёнка. ' * 500) + 'Последняя строка истории.'
+        self.page.text = ('Длинная история ребёнка. ' * 65) + 'Последняя строка истории.'
         output = book_pdf(self.private, [self.page])
         pdf = PdfReader(output)
-        self.assertGreater(len(pdf.pages), 3)
-        self.assertIn('Последняя строка истории.', '\n'.join(p.extract_text() for p in pdf.pages))
+        self.assertEqual(len(pdf.pages), 3)
+        self.assertIn('Последняя строка истории.', pdf.pages[1].extract_text())
+        from pypdf.generic import ContentStream
+        matrices = [operands for operands, operator in ContentStream(pdf.pages[1].get_contents(), pdf).operations if operator == b'cm']
+        self.assertTrue(any(float(matrix[0]) > 300 and float(matrix[3]) > 300 for matrix in matrices))
+        output.close()
+
+    def test_pdf_excessive_text_returns_error_without_extra_pages_or_truncation(self):
+        from .exports import book_pdf, ExportError
+        self.page.text = 'Длинная история ребёнка. ' * 1000
+        with self.assertRaisesMessage(ExportError, 'слишком много текста'):
+            book_pdf(self.private, [self.page])
+
+    def test_pdf_every_source_page_owns_exactly_one_leaf(self):
+        from .exports import book_pdf
+        from pypdf import PdfReader
+        pages = [self.page]
+        for number in range(2, 6):
+            pages.append(BookPage.objects.create(book=self.private, position=number, title=f'История {number}',
+                         text=(f'Текст истории {number}. ' * (number*15)) + f'Конец истории {number}.', illustration=image_file()))
+        output = book_pdf(self.private, pages)
+        pdf = PdfReader(output)
+        self.assertEqual(len(pdf.pages), len(pages)+2)
+        for number in range(2, 6):
+            self.assertIn(f'Конец истории {number}.', ' '.join(pdf.pages[number].extract_text().split()))
         output.close()
 
     def test_export_access_revocation_and_invalid_format(self):
@@ -127,6 +152,8 @@ class PlatformTests(TestCase):
         response = self.client.get(reverse('reader', args=[self.public.slug]))
         self.assertContains(response, 'Скачать книгу PDF')
         self.assertContains(response, 'Страница без аудио:')
+        self.assertContains(response, 'Только страница')
+        self.assertContains(response, 'Вернуть меню')
         self.assertNotContains(response, 'Скачать аудиокнигу MP3')
 
     def test_export_busy_returns_retry_after(self):
@@ -315,7 +342,7 @@ class PlatformTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Открытая страница')
 
-@override_settings(RATE_LIMIT_ENABLED=True, PASSWORD_HASHERS=['django.contrib.auth.hashers.MD5PasswordHasher'], STORAGES={'staticfiles': {'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'}, 'default': {'BACKEND': 'library.storage.PrivateStorage'}})
+@override_settings(STATIC_ROOT=None, RATE_LIMIT_ENABLED=True, PASSWORD_HASHERS=['django.contrib.auth.hashers.MD5PasswordHasher'], STORAGES={'staticfiles': {'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'}, 'default': {'BACKEND': 'library.storage.PrivateStorage'}})
 class RateLimitTests(TestCase):
     def test_repeated_login_is_limited(self):
         for _ in range(20): self.client.post(reverse('login'), {'username': 'none', 'password': 'bad'})

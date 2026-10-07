@@ -20,14 +20,18 @@ font_lock = threading.Lock()
 
 
 def book_pdf(book, pages):
+    """Exactly one A4 leaf per source page. Images never shrink to fit more text."""
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_CENTER
-    from reportlab.lib.pagesizes import A5
+    from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import mm
+    from reportlab.lib.utils import ImageReader
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak, Image
+    from reportlab.pdfgen.canvas import Canvas
+    from reportlab.platypus import Paragraph
+    from reportlab.graphics import renderPDF
     from reportlab.graphics.shapes import Drawing
     from reportlab.graphics.barcode.qr import QrCodeWidget
 
@@ -37,90 +41,121 @@ def book_pdf(book, pages):
             pdfmetrics.registerFont(TTFont('BookSerif', str(root / 'DejaVuSerif.ttf')))
             pdfmetrics.registerFont(TTFont('BookSerifBold', str(root / 'DejaVuSerif-Bold.ttf')))
     output = tempfile.SpooledTemporaryFile(max_size=8 * 1024 * 1024)
-    width, height = A5
+    width, height = A4
+    margin = 20 * mm
+    content_width = width - 2 * margin
     ink = colors.HexColor('#304b40')
-    body = ParagraphStyle('Story', fontName='BookSerif', fontSize=12, leading=19,
-                          textColor=ink, spaceAfter=10, splitLongWords=True)
-    heading = ParagraphStyle('Heading', parent=body, fontName='BookSerifBold',
-                             fontSize=20, leading=27, spaceAfter=15, keepWithNext=True)
-    center = ParagraphStyle('Center', parent=body, alignment=TA_CENTER)
-    cover_title = ParagraphStyle('Cover', parent=heading, alignment=TA_CENTER,
-                                fontSize=25, leading=33, keepWithNext=False)
-    doc = SimpleDocTemplate(output, pagesize=A5, rightMargin=18*mm, leftMargin=18*mm,
-                            topMargin=20*mm, bottomMargin=20*mm, title=book.title,
-                            author='Книги рядом', pageCompression=1)
-    story = []
+    canvas = Canvas(output, pagesize=A4, pageCompression=1)
+    canvas.setTitle(book.title)
+    canvas.setAuthor('Книги рядом')
 
     def text(value):
-        # Decorative emoji absent from the embedded font must not become black boxes.
         glyphs = pdfmetrics.getFont('BookSerif').face.charToGlyph
-        value = ''.join(character if ord(character) in glyphs or character in '\n\t' else
-                        '' if ord(character) in (0xFE0F, 0x200D) else '*' for character in value)
-        return escape(value)
+        # Ignore unsupported decorative emoji instead of printing replacement boxes/stars.
+        return escape(''.join(c for c in value if ord(c) in glyphs or c in '\n\t'))
 
-    def picture(field, max_height):
-        if not field: return None
-        with field.open('rb') as source:
-            data = BytesIO(source.read())
-        image = Image(data)
-        scale = min(doc.width / image.imageWidth, max_height / image.imageHeight)
-        image.drawWidth = image.imageWidth * scale
-        image.drawHeight = image.imageHeight * scale
-        image.hAlign = 'CENTER'
-        return image
-
-    story += [Spacer(1, 12*mm), Paragraph('КНИГИ РЯДОМ', center), Spacer(1, 8*mm),
-              Paragraph(text(book.title), cover_title), Spacer(1, 6*mm)]
-    cover = picture(book.cover or next((p.illustration for p in pages if p.illustration), None), 90*mm)
-    if cover: story += [cover, Spacer(1, 6*mm)]
-    story.append(Paragraph(text(book.age_label), center))
-    for index, page in enumerate(pages, 1):
-        label = Paragraph(f'История {index}', body)
-        title = Paragraph(text(page.title), heading)
-        paragraphs = [text(p).replace('\n', '<br/>') for p in page.text.split('\n\n') if p.strip()]
-        # Prefer one printed leaf per source page, without cropping long stories.
-        for font_size, image_height in ((12, 65), (11, 50), (10.5, 38), (10.5, 30), (10, 24)):
-            style = ParagraphStyle('PageStory', parent=body, fontSize=font_size,
-                                   leading=font_size*1.45, spaceAfter=5)
-            image = picture(page.illustration, image_height*mm)
-            content = [label, title]
-            if image: content += [image, Spacer(1, 5*mm)]
-            content += [Paragraph(p, style) for p in paragraphs]
-            used = sum(item.wrap(doc.width-12, doc.height)[1] + item.getSpaceAfter() +
-                       item.getSpaceBefore() for item in content)
-            if used <= doc.height-60: break
-        story += [PageBreak(), *content]
-    url = settings.SITE_URL.rstrip('/') + '/'
-    qr = QrCodeWidget(url)
-    bounds = qr.getBounds()
-    size = 45 * mm
-    drawing = Drawing(size, size, transform=[size/(bounds[2]-bounds[0]), 0, 0,
-                                           size/(bounds[3]-bounds[1]), 0, 0])
-    drawing.add(qr)
-    drawing.hAlign = 'CENTER'
-    story += [PageBreak(), Spacer(1, 20*mm), Paragraph('Продолжение начинается здесь', cover_title),
-              Spacer(1, 10*mm), Paragraph('Новые истории и персональные книги для вашего ребёнка.', center),
-              Spacer(1, 10*mm), drawing, Spacer(1, 8*mm), Paragraph(escape(url), center)]
-
-    def background(canvas, document):
-        canvas.saveState()
+    def background(number):
         canvas.setFillColor(colors.HexColor('#fcf5e8'))
         canvas.rect(0, 0, width, height, stroke=0, fill=1)
         canvas.setStrokeColor(colors.HexColor('#dfd0b5'))
-        canvas.roundRect(9*mm, 9*mm, width-18*mm, height-18*mm, 4*mm, stroke=1, fill=0)
+        canvas.roundRect(10*mm, 10*mm, width-20*mm, height-20*mm, 4*mm, stroke=1, fill=0)
         canvas.setFillColor(colors.HexColor('#e6eddf'))
-        canvas.circle(width-13*mm, height-13*mm, 7*mm, stroke=0, fill=1)
+        canvas.circle(width-14*mm, height-14*mm, 8*mm, stroke=0, fill=1)
         canvas.setFont('BookSerif', 9)
         canvas.setFillColor(ink)
-        canvas.drawCentredString(width/2, 12*mm, str(document.page))
-        canvas.restoreState()
+        canvas.drawCentredString(width/2, 13*mm, str(number))
+
+    def fit_paragraph(value, available_width, available_height, maximum=14, minimum=9,
+                      bold=False, centered=False, identifier=''):
+        # Measure and draw the SAME Paragraph, width and leading; no frame pagination.
+        low, high = minimum, maximum
+        chosen = None
+        for _ in range(14):
+            size = maximum if _ == 0 else (low+high)/2
+            style = ParagraphStyle('Fit', fontName='BookSerifBold' if bold else 'BookSerif',
+                                   fontSize=size, leading=size*1.3, textColor=ink,
+                                   alignment=TA_CENTER if centered else 0,
+                                   splitLongWords=True, allowWidows=1, allowOrphans=1)
+            paragraph = Paragraph(value, style)
+            _, used_height = paragraph.wrap(available_width, available_height)
+            if used_height <= available_height:
+                chosen = (paragraph, used_height)
+                low = size
+                if size == maximum: break
+            else:
+                high = size
+            if high-low < 0.01: break
+        if chosen is None:
+            style = ParagraphStyle('Minimum', fontName='BookSerifBold' if bold else 'BookSerif',
+                                   fontSize=minimum, leading=minimum*1.3, textColor=ink,
+                                   alignment=TA_CENTER if centered else 0)
+            paragraph = Paragraph(value, style)
+            _, used_height = paragraph.wrap(available_width, available_height)
+            if used_height > available_height:
+                raise ExportError(f'Страница «{identifier or book.title}» содержит слишком много текста для одного листа с крупной иллюстрацией. Сократите текст этой страницы и повторите выгрузку.')
+            chosen = (paragraph, used_height)
+        return chosen
+
+    def draw_paragraph(value, top, available_height, **options):
+        paragraph, used_height = fit_paragraph(value, content_width, available_height, **options)
+        paragraph.drawOn(canvas, margin, top-used_height)
+        return top-used_height
+
+    def picture(field, top, box_height):
+        if not field: return
+        with field.open('rb') as source:
+            image = ImageReader(BytesIO(source.read()))
+        image_width, image_height = image.getSize()
+        scale = min(content_width / image_width, box_height / image_height)
+        drawn_width, drawn_height = image_width*scale, image_height*scale
+        canvas.drawImage(image, (width-drawn_width)/2, top-box_height+(box_height-drawn_height)/2,
+                         width=drawn_width, height=drawn_height, mask='auto')
+
     try:
-        doc.build(story, onFirstPage=background, onLaterPages=background)
+        background(1)
+        draw_paragraph('КНИГИ РЯДОМ', height-28*mm, 10*mm, maximum=12, centered=True)
+        draw_paragraph(text(book.title), height-45*mm, 45*mm, maximum=30, minimum=16, bold=True, centered=True)
+        cover = book.cover or next((p.illustration for p in pages if p.illustration), None)
+        picture(cover, height-100*mm, 140*mm)
+        draw_paragraph(text(book.age_label), 42*mm, 15*mm, maximum=13, centered=True)
+        canvas.showPage()
+        for index, page in enumerate(pages, 1):
+            background(index+1)
+            canvas.setFont('BookSerif', 10)
+            canvas.setFillColor(ink)
+            canvas.drawString(margin, height-23*mm, f'История {index}')
+            title_bottom = draw_paragraph(text(page.title), height-30*mm, 24*mm,
+                                          maximum=23, minimum=13, bold=True, identifier=page.title)
+            content_top = title_bottom-6*mm
+            if page.illustration:
+                picture(page.illustration, content_top, 112*mm)
+                content_top -= 119*mm
+            value = '<br/><br/>'.join(text(p).replace('\n','<br/>') for p in page.text.split('\n\n') if p.strip())
+            draw_paragraph(value, content_top, content_top-24*mm, maximum=14, minimum=9,
+                           identifier=page.title)
+            canvas.showPage()
+        background(len(pages)+2)
+        draw_paragraph('Продолжение начинается здесь', height-60*mm, 40*mm,
+                       maximum=28, minimum=18, centered=True, bold=True)
+        draw_paragraph('Новые истории и персональные книги для вашего ребёнка.', height-110*mm,
+                       30*mm, maximum=14, centered=True)
+        url = settings.SITE_URL.rstrip('/')+'/'
+        qr = QrCodeWidget(url)
+        bounds = qr.getBounds()
+        size = 55*mm
+        drawing = Drawing(size, size, transform=[size/(bounds[2]-bounds[0]),0,0,size/(bounds[3]-bounds[1]),0,0])
+        drawing.add(qr)
+        renderPDF.draw(drawing, canvas, (width-size)/2, 75*mm)
+        draw_paragraph(escape(url), 62*mm, 30*mm, maximum=12, minimum=8, centered=True)
+        canvas.linkURL(url, ((width-size)/2,75*mm,(width+size)/2,130*mm), relative=0)
+        canvas.showPage()
+        canvas.save()
         output.seek(0)
         return output
     except Exception:
         output.close()
         raise
+
 
 
 def book_mp3(book, pages):

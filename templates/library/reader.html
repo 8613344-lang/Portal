@@ -14,10 +14,17 @@
     </div>
     {% if current %}<div class="auto-reader">
       <button class="button primary" id="auto-toggle" type="button" aria-pressed="false">▶ Автоматическое чтение</button>
+      <button class="button secondary" id="page-only" type="button" aria-pressed="false">Только страница</button>
       <label for="page-delay">Страница без аудио: <input id="page-delay" type="number" min="3" max="300" value="15"> сек.</label>
       <p class="muted" id="auto-status" role="status">С записью — переход после её окончания. Без записи — по таймеру.</p>
     </div>{% endif %}
   </div>
+  {% if current %}<div class="focus-controls" aria-label="Управление просмотром страницы">
+    <button type="button" id="focus-exit">← Вернуть меню</button>
+    <button type="button" id="focus-play">▶ Читать</button>
+    <span id="focus-number">{{ number }} / {{ total }}</span>
+    <span id="focus-status" role="status"></span>
+  </div>{% endif %}
   {% if current %}
   <div class="reader-layout">
     <aside class="contents"><p class="eyebrow">СОДЕРЖАНИЕ</p><ol>{% for page in pages %}<li><a class="{% if page.pk == current.pk %}active{% endif %}" href="?page={{ forloop.counter }}"><span>{{ forloop.counter|stringformat:'02d' }}</span>{{ page.title }}</a></li>{% endfor %}</ol></aside>

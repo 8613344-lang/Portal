@@ -5,6 +5,73 @@ if (reader && document.querySelector('#auto-toggle')) {
   const toggle = document.querySelector('#auto-toggle');
   const delay = document.querySelector('#page-delay');
   const status = document.querySelector('#auto-status');
+  const pageOnly = document.querySelector('#page-only');
+  const focusPlay = document.querySelector('#focus-play');
+  const focusStatus = document.querySelector('#focus-status');
+  let focusMode = false;
+  let controlsTimer = null;
+  const observer = new ResizeObserver(() => fitPage());
+
+  function fitPage() {
+    if (!focusMode) return;
+    const page = reader.querySelector('.reading-page');
+    if (!page) return;
+    const scale = Math.min(1, (innerWidth-24)/page.offsetWidth, (innerHeight-24)/page.offsetHeight);
+    page.style.setProperty('--page-scale', String(scale));
+  }
+
+  function watchPage() {
+    observer.disconnect();
+    const page = reader.querySelector('.reading-page');
+    if (page) {
+      observer.observe(page);
+      page.querySelectorAll('img').forEach(image => image.addEventListener('load', fitPage, {once:true}));
+    }
+    document.querySelector('#focus-number').textContent = `${reader.dataset.number} / ${reader.dataset.total}`;
+    requestAnimationFrame(fitPage);
+  }
+
+  function showControls() {
+    if (!focusMode) return;
+    document.body.classList.add('focus-controls-visible');
+    clearTimeout(controlsTimer);
+    controlsTimer = setTimeout(() => document.body.classList.remove('focus-controls-visible'), 2500);
+  }
+
+  function setFocus(enabled) {
+    focusMode = enabled;
+    document.body.classList.toggle('book-focus', enabled);
+    pageOnly.setAttribute('aria-pressed', String(enabled));
+    if (enabled) {
+      watchPage();
+      showControls();
+      document.activeElement.blur();
+    } else {
+      observer.disconnect();
+      clearTimeout(controlsTimer);
+      document.body.classList.remove('focus-controls-visible');
+      pageOnly.focus();
+    }
+  }
+  pageOnly.addEventListener('click', () => setFocus(!focusMode));
+  document.querySelector('#focus-exit').addEventListener('click', () => setFocus(false));
+  focusPlay.addEventListener('click', () => toggle.click());
+  document.addEventListener('pointermove', showControls);
+  reader.addEventListener('pointerdown', event => {
+    if (focusMode && !event.target.closest('.focus-controls')) showControls();
+  });
+  window.addEventListener('resize', fitPage);
+  document.addEventListener('keydown', event => {
+    if (!focusMode) return;
+    if (event.key === 'Escape') { event.preventDefault(); setFocus(false); }
+    if (event.code === 'Space' && !event.target.closest('button,input,a')) {
+      event.preventDefault(); toggle.click(); showControls();
+    }
+  });
+  new MutationObserver(() => {
+    focusPlay.textContent = toggle.textContent;
+    focusStatus.textContent = status.textContent;
+  }).observe(document.querySelector('.auto-reader'), {subtree:true,childList:true,characterData:true});
   let running = false;
   let changing = false;
   let interval = null;
@@ -24,6 +91,7 @@ if (reader && document.querySelector('#auto-toggle')) {
     toggle.setAttribute('aria-pressed', 'false');
     if (audio()) audio().pause();
     status.textContent = message;
+    if (focusMode) showControls();
   }
 
   async function advance() {
@@ -63,7 +131,8 @@ if (reader && document.querySelector('#auto-toggle')) {
       changing = false;
       controller = null;
       bindAudio();
-      reader.querySelector('.reading-page').scrollIntoView({behavior: 'smooth', block: 'start'});
+      if (focusMode) watchPage();
+      else reader.querySelector('.reading-page').scrollIntoView({behavior: 'smooth', block: 'start'});
       if (running) await playPage();
     } catch (error) {
       if (version !== generation) return;
@@ -115,6 +184,7 @@ if (reader && document.querySelector('#auto-toggle')) {
     generation += 1;
     toggle.textContent = 'Ⅱ Пауза';
     toggle.setAttribute('aria-pressed', 'true');
+    if (focusMode) showControls();
     if (Number(reader.dataset.number) >= Number(reader.dataset.total) &&
         status.textContent.startsWith('Книга закончилась')) await turnPage(1);
     else await playPage();
