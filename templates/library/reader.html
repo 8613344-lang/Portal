@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% block title %}{{ book.title }} · Книги рядом{% endblock %}
 {% block content %}
-<section class="reader-shell" data-book-reader data-number="{{ number }}" data-total="{{ total }}">
+<section class="reader-shell" data-book-reader data-number="{{ number }}" data-total="{{ total }}" data-focus-previous="{{ spread.previous }}" data-focus-next="{{ spread.next }}" data-focus-label="{{ spread.label }}">
   <div class="reader-top">
     <a class="text-link" href="{% if user.is_authenticated %}{% url 'account' %}{% else %}{% url 'catalog' %}{% endif %}">← К книгам</a>
     <span>{{ book.title }}</span><button class="text-link print-button" type="button">Печать страницы</button>
@@ -13,23 +13,25 @@
       <p class="muted">PDF: обложка, иллюстрации и последняя страница. {% if audio_count %}В MP3 войдут записи {{ audio_count }} из {{ total }} страниц по порядку.{% else %}Для MP3 сначала добавьте записи страниц.{% endif %}</p>
     </div>
     {% if current %}<div class="auto-reader">
-      <button class="button primary" id="auto-toggle" type="button" aria-pressed="false">▶ Автоматическое чтение</button>
       <button class="button secondary" id="page-only" type="button" aria-pressed="false">Только страница</button>
-      <label for="page-delay">Страница без аудио: <input id="page-delay" type="number" min="3" max="300" value="15"> сек.</label>
-      <p class="muted" id="auto-status" role="status">С записью — переход после её окончания. Без записи — по таймеру.</p>
+      <p class="muted">Просмотр и прослушивание книги. Управление появится внутри режима.</p>
     </div>{% endif %}
   </div>
   {% if current %}<div class="focus-controls" aria-label="Управление просмотром страницы">
     <button type="button" id="focus-exit">← Вернуть меню</button>
-    <button type="button" id="focus-play">▶ Читать</button>
+    <button type="button" id="focus-previous" aria-label="Предыдущая страница">← Назад</button>
+    <button type="button" id="focus-play" aria-pressed="false">▶ Авточтение</button>
+    <button type="button" id="focus-next" aria-label="Следующая страница">Вперёд →</button>
     <span id="focus-number">{{ number }} / {{ total }}</span>
-    <span id="focus-status" role="status"></span>
+    <label for="page-delay">Без аудио: <input id="page-delay" type="number" min="3" max="300" value="15"> сек.</label>
+    <span id="auto-status" role="status"></span>
   </div>{% endif %}
   {% if current %}
   <div class="reader-layout">
     <aside class="contents"><p class="eyebrow">СОДЕРЖАНИЕ</p><ol>{% for page in pages %}<li><a class="{% if page.pk == current.pk %}active{% endif %}" href="?page={{ forloop.counter }}"><span>{{ forloop.counter|stringformat:'02d' }}</span>{{ page.title }}</a></li>{% endfor %}</ol></aside>
     <div class="reader-main">
-      <article class="reading-page background-{{ book.background_theme }}{% if current.pdf_full_page %} pdf-leaf{% endif %}"{% if book.background_theme == 'custom' and book.background_image %} style="background-image:url('{{ book.background_image.url }}')"{% endif %}>
+      <div class="reading-sheet">
+      <article class="reading-page background-{{ book.background_theme }}{% if current.pdf_full_page %} pdf-leaf{% endif %}" style="--ending-panel:{{ book.ending_panel_css }};--ending-ink:{{ book.ending_text_color }};{% if current.kind == 'ending' %}color:{{ book.ending_text_color }};{% endif %}{% if book.background_theme == 'custom' and book.background_image %}background-image:url('{{ book.background_image.url }}'){% endif %}">
         {% if current.pdf_full_page %}
           <h1 class="sr-only">{{ current.display_title|default:current.title }}</h1>
           {% if current.illustration %}<img class="page-illustration" src="{{ current.illustration.url }}" alt="{{ current.title }}">{% endif %}
@@ -45,6 +47,18 @@
           {% if current.kind == 'ending' and book.ending_show_qr %}<a class="project-qr" href="{% url 'home' %}" aria-label="Сайт проекта">{{ project_qr|safe }}</a>{% endif %}
         {% endif %}
       </article>
+      {% if spread.split_story or spread.pages|length > 1 %}
+      <div class="focus-spread" aria-label="Разворот книги">
+        {% if spread.split_story %}
+          <article class="spread-leaf spread-picture"><img src="{{ current.illustration.url }}" alt="{{ current.title }}"></article>
+          <article class="spread-leaf spread-text background-{{ book.background_theme }}"{% if book.background_theme == 'custom' and book.background_image %} style="background-image:url('{{ book.background_image.url }}')"{% endif %}><h1>{{ current.title }}</h1><div class="story-text">{{ current.text|linebreaks }}</div></article>
+          {% if current.audio %}<audio class="spread-audio" preload="metadata" src="{{ current.audio.url }}"></audio>{% endif %}
+        {% else %}
+          {% for leaf in spread.pages %}<article class="spread-leaf spread-picture"><img src="{{ leaf.illustration.url }}" alt="{{ leaf.title }}"></article>{% if leaf.audio %}<audio class="spread-audio" preload="metadata" src="{{ leaf.audio.url }}"></audio>{% endif %}{% endfor %}
+        {% endif %}
+      </div>
+      {% endif %}
+      </div>
       <section class="audio-panel" id="page-audio">
         <div><span class="audio-symbol">♫</span><div><h2>Послушать страницу</h2><p>{% if current.audio %}{{ current.title }}{% else %}Для этой страницы запись ещё не добавлена{% endif %}</p></div></div>
         {% if current.audio %}<audio controls preload="metadata" src="{{ current.audio.url }}" aria-label="Озвучка: {{ current.title }}"></audio>{% endif %}

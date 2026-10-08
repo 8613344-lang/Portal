@@ -18,11 +18,35 @@ def book_sheets(book, pages):
     for page in body: page.kind = 'story'
     return [cover, *body, ending]
 
-def project_qr():
+def reader_spread(book, sheets, number):
+    """Logical story spreads; pair adjacent imported facsimile leaves."""
+    groups = []
+    index = 0
+    while index < len(sheets):
+        sheet = sheets[index]
+        size = 1
+        if (book.pdf_layout == 'alternating' and sheet.kind == 'story' and sheet.pdf_full_page
+                and index + 1 < len(sheets) and sheets[index + 1].kind == 'story'
+                and sheets[index + 1].pdf_full_page):
+            size = 2
+        groups.append((index + 1, sheets[index:index + size]))
+        index += size
+    for group_index, (start, pages) in enumerate(groups):
+        if start <= number < start + len(pages):
+            split_story = (book.pdf_layout == 'alternating' and len(pages) == 1
+                           and pages[0].kind == 'story' and not pages[0].pdf_full_page
+                           and pages[0].illustration and pages[0].text.strip())
+            return {'pages': pages, 'split_story': bool(split_story),
+                    'previous': groups[group_index - 1][0] if group_index else 0,
+                    'next': groups[group_index + 1][0] if group_index + 1 < len(groups) else 0,
+                    'label': str(start) if len(pages) == 1 else f'{start}–{start + len(pages) - 1}'}
+
+def project_qr(book=None):
     from django.conf import settings
     from reportlab.graphics.shapes import Drawing
     from reportlab.graphics.barcode.qr import QrCodeWidget
-    qr = QrCodeWidget(settings.SITE_URL.rstrip('/')+'/')
+    from reportlab.lib.colors import HexColor
+    qr = QrCodeWidget(settings.SITE_URL.rstrip('/')+'/', barFillColor=HexColor(book.ending_qr_color if book else '#000000'))
     bounds = qr.getBounds()
     size = 160
     drawing = Drawing(size,size,transform=[size/(bounds[2]-bounds[0]),0,0,size/(bounds[3]-bounds[1]),0,0])

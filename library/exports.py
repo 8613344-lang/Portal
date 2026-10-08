@@ -183,10 +183,11 @@ def book_pdf(book, pages):
             background(leaf_number)
             if end_picture: full_picture(end_picture, preserve=True)
         url = settings.SITE_URL.rstrip('/')+'/'
+        ink = colors.HexColor(book.ending_text_color)
         if end_picture and (book.ending_show_text or book.ending_show_qr):
             canvas.saveState()
-            canvas.setFillColor(colors.white)
-            canvas.setFillAlpha(.93)
+            canvas.setFillColor(colors.HexColor(book.ending_panel_color))
+            canvas.setFillAlpha((100-book.ending_panel_transparency)/100)
             canvas.roundRect(margin, 22*mm, content_width, 88*mm, 4*mm, fill=1,stroke=0)
             canvas.restoreState()
         if book.ending_show_text:
@@ -201,7 +202,7 @@ def book_pdf(book, pages):
                 draw_paragraph(text(book.ending_title),height-60*mm,40*mm,maximum=28,minimum=18,centered=True,bold=True)
                 draw_paragraph(text(book.ending_text).replace('\n','<br/>'),height-110*mm,40*mm,maximum=14,centered=True)
         if book.ending_show_qr:
-            qr = QrCodeWidget(url)
+            qr = QrCodeWidget(url, barFillColor=colors.HexColor(book.ending_qr_color))
             bounds = qr.getBounds()
             size = (44 if end_picture else 55)*mm
             drawing = Drawing(size,size,transform=[size/(bounds[2]-bounds[0]),0,0,size/(bounds[3]-bounds[1]),0,0])

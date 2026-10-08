@@ -80,6 +80,65 @@ class PlatformTests(TestCase):
         self.private.full_clean()
         self.assertEqual(self.private.background_theme, 'sky')
 
+    def test_native_alternating_reader_has_single_cover_and_story_spread(self):
+        self.private.pdf_layout = 'alternating'
+        self.private.save()
+        self.client.force_login(self.a)
+        url = reverse('reader', args=[self.private.slug])
+        self.assertNotContains(self.client.get(url), 'class="focus-spread"')
+        response = self.client.get(url+'?page=2')
+        self.assertTrue(response.context['spread']['split_story'])
+        self.assertEqual(response.context['spread']['previous'], 1)
+        self.assertEqual(response.context['spread']['next'], 3)
+        self.assertContains(response, 'class="focus-spread"')
+        self.assertContains(response, 'class="spread-leaf spread-picture"')
+        self.assertContains(response, 'class="spread-leaf spread-text')
+        self.assertNotContains(self.client.get(url+'?page=3'), 'class="focus-spread"')
+
+    def test_imported_alternating_spreads_pair_leaves_and_handle_odd_tail(self):
+        self.private.pdf_layout = 'alternating'
+        self.private.save()
+        self.page.pdf_full_page = True
+        self.page.save()
+        for position in (2, 3):
+            BookPage.objects.create(book=self.private, position=position, title=f'Лист {position}', illustration=image_file(), pdf_full_page=True)
+        self.client.force_login(self.a)
+        url = reverse('reader', args=[self.private.slug])
+        for number in (2, 3):
+            response = self.client.get(url+f'?page={number}')
+            spread = response.context['spread']
+            self.assertEqual(len(spread['pages']), 2)
+            self.assertEqual((spread['previous'],spread['next'],spread['label']), (1,4,'2–3'))
+        tail = self.client.get(url+'?page=4').context['spread']
+        self.assertEqual((tail['previous'],tail['next']), (2,5))
+        self.assertEqual(len(tail['pages']), 1)
+
+    def test_ending_panel_colors_transparency_validation_and_pdf(self):
+        from django.core.exceptions import ValidationError
+        from .exports import book_pdf
+        from pypdf import PdfReader
+        self.private.ending_image = image_file()
+        self.private.ending_full_page = True
+        self.private.ending_panel_color = '#aaccee'
+        self.private.ending_text_color = '#123456'
+        self.private.ending_qr_color = '#234567'
+        self.private.ending_panel_transparency = 70
+        self.private.full_clean()
+        self.private.save()
+        self.client.force_login(self.a)
+        response = self.client.get(reverse('reader', args=[self.private.slug])+'?page=3')
+        self.assertContains(response, '--ending-panel:rgba(170,204,238,0.30)')
+        self.assertContains(response, '--ending-ink:#123456')
+        with book_pdf(self.private, [self.page]) as output:
+            page = PdfReader(output).pages[-1]
+            states = page['/Resources']['/ExtGState'].values()
+            self.assertTrue(any(abs(float(state.get('/ca', 1))-.3) < .001 for state in states))
+        self.private.ending_panel_transparency = 101
+        with self.assertRaises(ValidationError): self.private.full_clean()
+        self.private.ending_panel_transparency = 0
+        self.private.ending_qr_color = 'red;anything'
+        with self.assertRaises(ValidationError): self.private.full_clean()
+
     def test_custom_background_is_embedded_on_full_image_pdf_leaves(self):
         from .exports import book_pdf
         from pypdf import PdfReader
@@ -279,7 +338,8 @@ class PlatformTests(TestCase):
     def test_admin_creates_book_from_pdf_with_layout_and_background(self):
         self.client.force_login(self.staff)
         data = {'title':'Из PDF', 'slug':'admin-pdf', 'age_label':'Для чтения', 'status':'draft', 'visibility':'restricted',
-                'pdf_layout':'alternating', 'background_theme':'sky', 'source_pdf':self.pdf_upload(), '_save':'1'}
+                'pdf_layout':'alternating', 'background_theme':'sky', 'source_pdf':self.pdf_upload(), '_save':'1',
+                'ending_panel_color':'#ffffff', 'ending_panel_transparency':'7', 'ending_text_color':'#304b40', 'ending_qr_color':'#000000'}
         for prefix in ('pages','grants'):
             data.update({f'{prefix}-TOTAL_FORMS':'0',f'{prefix}-INITIAL_FORMS':'0',f'{prefix}-MIN_NUM_FORMS':'0',f'{prefix}-MAX_NUM_FORMS':'1000'})
         response = self.client.post(reverse('admin:library_book_add'), data)
@@ -389,7 +449,10 @@ class PlatformTests(TestCase):
     def test_reader_shows_exports_auto_reader_and_missing_audio_count(self):
         response = self.client.get(reverse('reader', args=[self.public.slug]))
         self.assertContains(response, 'Скачать книгу PDF')
-        self.assertContains(response, 'Страница без аудио:')
+        self.assertContains(response, 'Без аудио:')
+        self.assertNotContains(response, 'id="auto-toggle"')
+        self.assertContains(response, 'id="focus-previous"')
+        self.assertContains(response, 'id="focus-next"')
         self.assertContains(response, 'Только страница')
         self.assertContains(response, 'Вернуть меню')
         self.assertNotContains(response, 'Скачать аудиокнигу MP3')

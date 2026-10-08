@@ -4,6 +4,7 @@ from django.conf import settings
 from django.db import models
 from django.db.models import Q
 from django.utils import timezone
+from django.core.validators import MinValueValidator, MaxValueValidator, RegexValidator
 from .validators import normalize_image, validate_audio
 
 def private_path(instance, filename):
@@ -37,6 +38,10 @@ class Book(models.Model):
     ending_show_text = models.BooleanField('Показывать текст на последней странице', default=True)
     ending_title = models.CharField('Заголовок последней страницы', max_length=200, blank=True, default='Продолжение начинается здесь')
     ending_text = models.TextField('Текст последней страницы', blank=True, default='Новые истории и персональные книги для вашего ребёнка.')
+    ending_panel_color = models.CharField('Цвет подложки текста и QR', max_length=7, default='#ffffff', validators=[RegexValidator(r'^#[0-9a-fA-F]{6}$', 'Укажите цвет в формате #RRGGBB.')])
+    ending_panel_transparency = models.PositiveSmallIntegerField('Прозрачность подложки, %', default=7, validators=[MinValueValidator(0), MaxValueValidator(100)], help_text='0 — непрозрачная подложка; 100 — полностью прозрачная.')
+    ending_text_color = models.CharField('Цвет текста последней страницы', max_length=7, default='#304b40', validators=[RegexValidator(r'^#[0-9a-fA-F]{6}$', 'Укажите цвет в формате #RRGGBB.')])
+    ending_qr_color = models.CharField('Цвет QR-кода', max_length=7, default='#000000', validators=[RegexValidator(r'^#[0-9a-fA-F]{6}$', 'Укажите цвет в формате #RRGGBB.')])
     pdf_layout = models.CharField('Вариант выгрузки PDF', max_length=20, default='combined', choices=[('combined', 'Картинка и текст на одном листе'), ('alternating', 'Полный лист картинки, затем лист текста')])
     background_theme = models.CharField('Фон книги', max_length=20, default='paper', choices=[('paper', 'Тёплая бумага'), ('white', 'Белый'), ('mint', 'Мятный'), ('sky', 'Небесный'), ('rose', 'Розовый'), ('custom', 'Своя картинка')])
     background_image = models.FileField('Своя картинка фона', upload_to=private_path, blank=True, help_text='JPEG, PNG или WebP; фон используется в просмотрщике и PDF.')
@@ -49,6 +54,11 @@ class Book(models.Model):
         verbose_name = 'Книга'
         verbose_name_plural = 'Книги'
     def __str__(self): return self.title
+    @property
+    def ending_panel_css(self):
+        value = self.ending_panel_color.lstrip('#')
+        rgb = ','.join(str(int(value[i:i+2], 16)) for i in (0, 2, 4))
+        return f'rgba({rgb},{(100-self.ending_panel_transparency)/100:.2f})'
     def clean(self):
         from django.core.exceptions import ValidationError
         if self.background_image and not self.background_image._committed:

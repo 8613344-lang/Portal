@@ -29,7 +29,7 @@ class BookAdmin(admin.ModelAdmin):
     view_on_site = False
     fieldsets = [('Книга', {'fields': ('title', 'slug', 'description', 'child_name', 'age_label')}),
                  ('Обложка', {'fields': ('cover', 'cover_page', 'cover_full_page', 'cover_audio')}),
-                 ('Последняя страница', {'fields': ('ending_image', 'ending_page', 'ending_full_page', 'ending_audio', 'ending_show_qr', 'ending_show_text', 'ending_title', 'ending_text')}),
+                 ('Последняя страница', {'fields': ('ending_image', 'ending_page', 'ending_full_page', 'ending_audio', 'ending_show_qr', 'ending_show_text', 'ending_title', 'ending_text', 'ending_panel_color', 'ending_panel_transparency', 'ending_text_color', 'ending_qr_color')}),
                  ('Оформление и PDF', {'fields': ('pdf_layout', 'background_theme', 'background_image')}),
                  ('Импорт из PDF', {'fields': ('source_pdf',), 'description': 'При создании книги загрузите PDF: все листы автоматически станут страницами. Без текстового слоя листы сохраняются картинками.'}),
                  ('Публикация и доступ', {'fields': ('status', 'visibility')})]

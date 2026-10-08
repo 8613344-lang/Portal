@@ -11,6 +11,8 @@ class BookAdminForm(forms.ModelForm):
     class Meta:
         model = Book
         fields = '__all__'
+        widgets = {name: forms.TextInput(attrs={'type': 'color'}) for name in ('ending_panel_color', 'ending_text_color', 'ending_qr_color')}
+        widgets['ending_panel_transparency'] = forms.NumberInput(attrs={'min': 0, 'max': 100, 'step': 1})
     def clean_source_pdf(self):
         file = self.cleaned_data.get('source_pdf')
         if not file: return None
