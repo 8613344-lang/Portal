@@ -26,6 +26,9 @@ class Book(models.Model):
     child_name = models.CharField('Имя героя', max_length=100, blank=True)
     age_label = models.CharField('Возраст читателей', max_length=60, default='Для детей от 2 до 5 лет')
     cover = models.FileField('Обложка', upload_to=private_path, blank=True)
+    pdf_layout = models.CharField('Вариант выгрузки PDF', max_length=20, default='combined', choices=[('combined', 'Картинка и текст на одном листе'), ('alternating', 'Полный лист картинки, затем лист текста')])
+    background_theme = models.CharField('Фон книги', max_length=20, default='paper', choices=[('paper', 'Тёплая бумага'), ('white', 'Белый'), ('mint', 'Мятный'), ('sky', 'Небесный'), ('rose', 'Розовый'), ('custom', 'Своя картинка')])
+    background_image = models.FileField('Своя картинка фона', upload_to=private_path, blank=True, help_text='JPEG, PNG или WebP; фон используется в просмотрщике и PDF.')
     status = models.CharField('Состояние', max_length=20, choices=[('draft', 'Черновик'), ('published', 'Опубликована'), ('archived', 'В архиве')], default='draft', db_index=True)
     visibility = models.CharField('Доступ', max_length=20, choices=[('public', 'Публичная'), ('restricted', 'Для выбранных пользователей')], default='restricted', db_index=True)
     created_at = models.DateTimeField('Создана', auto_now_add=True)
@@ -35,7 +38,12 @@ class Book(models.Model):
         verbose_name = 'Книга'
         verbose_name_plural = 'Книги'
     def __str__(self): return self.title
-    def clean(self): self.cover = normalize_image(self.cover)
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        self.cover = normalize_image(self.cover)
+        self.background_image = normalize_image(self.background_image)
+        if self.background_theme == 'custom' and not self.background_image:
+            raise ValidationError({'background_image': 'Для своего фона загрузите картинку.'})
 
 class BookPage(models.Model):
     book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name='pages', verbose_name='Книга')
@@ -44,6 +52,7 @@ class BookPage(models.Model):
     text = models.TextField('Текст', blank=True, help_text='Абзацы разделяйте пустой строкой. HTML не поддерживается.')
     illustration = models.FileField('Иллюстрация', upload_to=private_path, blank=True)
     audio = models.FileField('Озвучка MP3 / WAV', upload_to=private_path, blank=True, validators=[validate_audio])
+    pdf_full_page = models.BooleanField('Лист PDF целиком', default=False, help_text='Импортированный лист показывается и выгружается целиком, без повторного заголовка или текста поверх изображения.')
     class Meta:
         ordering = ['position']
         constraints = [models.UniqueConstraint(fields=['book', 'position'], name='unique_book_page')]

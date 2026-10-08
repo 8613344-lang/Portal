@@ -30,6 +30,10 @@ class Command(BaseCommand):
             try:
                 with transaction.atomic():
                     book = Book(title=record.get('title', ''), slug=slug or '', description=record.get('description', ''), child_name=record.get('child_name', ''), age_label=record.get('age_label', 'Для чтения вместе'), status=record.get('status', 'draft'), visibility=record.get('visibility', 'restricted'))
+                    book.pdf_layout = record.get('pdf_layout', 'combined')
+                    book.background_theme = record.get('background_theme', 'paper')
+                    background = asset(record.get('background_image'))
+                    if background: book.background_image = background; files.append(background)
                     cover = asset(record.get('cover'))
                     if cover: book.cover = cover; files.append(cover)
                     book.full_clean(); book.save()

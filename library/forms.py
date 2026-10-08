@@ -1,7 +1,28 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
-from .models import Order
+from .models import Order, Book
+
+class BookAdminForm(forms.ModelForm):
+    source_pdf = forms.FileField(label='Загрузить книгу из PDF', required=False,
+                                widget=forms.FileInput(attrs={'accept': '.pdf,application/pdf'}),
+                                help_text='До 100 МБ и 100 листов. Только новая книга или книга без страниц. Листы сохраняются целиком; текст извлекается, если есть текстовый слой. Озвучка добавляется отдельно.')
+    can_import_pdf = False
+    class Meta:
+        model = Book
+        fields = '__all__'
+    def clean_source_pdf(self):
+        file = self.cleaned_data.get('source_pdf')
+        if not file: return None
+        if not self.can_import_pdf:
+            raise forms.ValidationError('Нужно право добавления страниц книги.')
+        if self.instance.pk and self.instance.pages.exists():
+            raise forms.ValidationError('Импорт доступен только для книги без страниц. Создайте новую книгу.')
+        if any(key.startswith('pages-') and key.endswith('-position') and value for key, value in self.data.items()):
+            raise forms.ValidationError('Импорт PDF и ручное добавление страниц выполните отдельно.')
+        from .pdf_import import prepare_pdf, PDFImportError
+        try: return prepare_pdf(file)
+        except PDFImportError as error: raise forms.ValidationError(str(error)) from error
 
 class RegistrationForm(UserCreationForm):
     email = forms.EmailField(label='Email')

@@ -54,3 +54,5 @@ Worker арендует задачу на 5 минут и делает сете�
 Демонстрационная книга перенесена из `8613344-lang/Dima`, исходный коммит `4c94a3c`. Новые книги и записи загружаются владельцем платформы; автоматической генерации книги здесь нет.
 
 В режиме «Только страница» CSS скрывает оболочку сайта; ResizeObserver и событие загрузки иллюстрации подбирают масштаб текущей страницы под окно. При перелистывании наблюдатель переключается на новый элемент. Управление доступно через скрывающуюся панель, Esc и пробел; озвучка и проверка доступа остаются прежними.
+
+PDF layout/background stored in Book; background image uses the same private media access checks. `pdf_full_page` marks imported facsimile pages, which bypass layout reflow to preserve the source. PDFium renders staged JPEG files under a per-process mutex; input limits are 100 MB / 100 sheets / 90 seconds. Import commits pages atomically and removes stored images on write failure. Original PDF is not retained or publicly served. Source text layers are copied, scans require a separate OCR workflow if editable text is needed.

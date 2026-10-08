@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.utils import timezone
 from .models import Book, BookPage, BookAccess, Order, NotificationRecipient, Notification
+from .forms import BookAdminForm
 
 admin.site.site_header = 'Книги рядом · управление'
 admin.site.site_title = 'Книги рядом'
@@ -9,7 +10,7 @@ admin.site.index_title = 'Книги, заказы и доступы'
 class PageInline(admin.StackedInline):
     model = BookPage
     extra = 0
-    fields = ['position', 'title', 'text', 'illustration', 'audio']
+    fields = ['position', 'title', 'text', 'illustration', 'audio', 'pdf_full_page']
     show_change_link = True
 
 class AccessInline(admin.TabularInline):
@@ -19,12 +20,34 @@ class AccessInline(admin.TabularInline):
 
 @admin.register(Book)
 class BookAdmin(admin.ModelAdmin):
+    form = BookAdminForm
     list_display = ['title', 'status', 'visibility', 'created_at']
-    list_filter = ['status', 'visibility']
+    list_filter = ['status', 'visibility', 'pdf_layout', 'background_theme']
     search_fields = ['title', 'slug', 'child_name']
     prepopulated_fields = {'slug': ['title']}
     inlines = [PageInline, AccessInline]
     view_on_site = False
+    fieldsets = [('Книга', {'fields': ('title', 'slug', 'description', 'child_name', 'age_label', 'cover')}),
+                 ('Оформление и PDF', {'fields': ('pdf_layout', 'background_theme', 'background_image')}),
+                 ('Импорт из PDF', {'fields': ('source_pdf',), 'description': 'При создании книги загрузите PDF: все листы автоматически станут страницами. Без текстового слоя листы сохраняются картинками.'}),
+                 ('Публикация и доступ', {'fields': ('status', 'visibility')})]
+
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        class AuthorizedBookForm(form):
+            can_import_pdf = request.user.has_perm('library.add_bookpage')
+        return AuthorizedBookForm
+
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)
+        prepared = form.cleaned_data.get('source_pdf')
+        if prepared:
+            from .pdf_import import save_pdf_pages
+            try:
+                count = save_pdf_pages(form.instance, prepared)
+                self.message_user(request, f'PDF импортирован: {count} страниц. Проверьте книгу перед публикацией.')
+            finally:
+                prepared.close()
 
 @admin.register(BookPage)
 class PageAdmin(admin.ModelAdmin):

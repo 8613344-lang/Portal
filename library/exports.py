@@ -20,7 +20,7 @@ font_lock = threading.Lock()
 
 
 def book_pdf(book, pages):
-    """Exactly one A4 leaf per source page. Images never shrink to fit more text."""
+    """A4 combined/alternating layouts; imported PDF leaves preserve their source."""
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_CENTER
     from reportlab.lib.pagesizes import A4
@@ -55,8 +55,11 @@ def book_pdf(book, pages):
         return escape(''.join(c for c in value if ord(c) in glyphs or c in '\n\t'))
 
     def background(number):
-        canvas.setFillColor(colors.HexColor('#fcf5e8'))
+        palette = {'paper':'#fcf5e8', 'white':'#ffffff', 'mint':'#edf5ed', 'sky':'#edf4fb', 'rose':'#fbefef'}
+        canvas.setFillColor(colors.HexColor(palette.get(book.background_theme, '#fcf5e8')))
         canvas.rect(0, 0, width, height, stroke=0, fill=1)
+        if book.background_theme == 'custom' and book.background_image:
+            full_picture(book.background_image)
         canvas.setStrokeColor(colors.HexColor('#dfd0b5'))
         canvas.roundRect(10*mm, 10*mm, width-20*mm, height-20*mm, 4*mm, stroke=1, fill=0)
         canvas.setFillColor(colors.HexColor('#e6eddf'))
@@ -92,7 +95,7 @@ def book_pdf(book, pages):
             paragraph = Paragraph(value, style)
             _, used_height = paragraph.wrap(available_width, available_height)
             if used_height > available_height:
-                raise ExportError(f'Страница «{identifier or book.title}» содержит слишком много текста для одного листа с крупной иллюстрацией. Сократите текст этой страницы и повторите выгрузку.')
+                raise ExportError(f'Страница «{identifier or book.title}» содержит слишком много текста для одного листа. Сократите текст этой страницы и повторите выгрузку.')
             chosen = (paragraph, used_height)
         return chosen
 
@@ -111,6 +114,19 @@ def book_pdf(book, pages):
         canvas.drawImage(image, (width-drawn_width)/2, top-box_height+(box_height-drawn_height)/2,
                          width=drawn_width, height=drawn_height, mask='auto')
 
+    def full_picture(field, preserve=False):
+        with field.open('rb') as source:
+            image = ImageReader(BytesIO(source.read()))
+        iw, ih = image.getSize()
+        scale = min(width/iw, height/ih) if preserve else max(width/iw, height/ih)
+        dw, dh = iw*scale, ih*scale
+        canvas.saveState()
+        path = canvas.beginPath()
+        path.rect(0, 0, width, height)
+        canvas.clipPath(path, stroke=0)
+        canvas.drawImage(image, (width-dw)/2, (height-dh)/2, width=dw, height=dh, mask='auto')
+        canvas.restoreState()
+
     try:
         background(1)
         draw_paragraph('КНИГИ РЯДОМ', height-28*mm, 10*mm, maximum=12, centered=True)
@@ -119,22 +135,37 @@ def book_pdf(book, pages):
         picture(cover, height-100*mm, 140*mm)
         draw_paragraph(text(book.age_label), 42*mm, 15*mm, maximum=13, centered=True)
         canvas.showPage()
+        leaf_number = 2
         for index, page in enumerate(pages, 1):
-            background(index+1)
+            if page.pdf_full_page and page.illustration:
+                canvas.setFillColor(colors.white)
+                canvas.rect(0, 0, width, height, stroke=0, fill=1)
+                full_picture(page.illustration, preserve=True)
+                canvas.showPage()
+                leaf_number += 1
+                continue
+            alternating = book.pdf_layout == 'alternating'
+            if alternating and page.illustration:
+                full_picture(page.illustration)
+                canvas.showPage()
+                leaf_number += 1
+                if not page.text.strip(): continue
+            background(leaf_number)
             canvas.setFont('BookSerif', 10)
             canvas.setFillColor(ink)
             canvas.drawString(margin, height-23*mm, f'История {index}')
             title_bottom = draw_paragraph(text(page.title), height-30*mm, 24*mm,
                                           maximum=23, minimum=13, bold=True, identifier=page.title)
             content_top = title_bottom-6*mm
-            if page.illustration:
+            if page.illustration and not alternating:
                 picture(page.illustration, content_top, 112*mm)
                 content_top -= 119*mm
             value = '<br/><br/>'.join(text(p).replace('\n','<br/>') for p in page.text.split('\n\n') if p.strip())
             draw_paragraph(value, content_top, content_top-24*mm, maximum=14, minimum=9,
                            identifier=page.title)
             canvas.showPage()
-        background(len(pages)+2)
+            leaf_number += 1
+        background(leaf_number)
         draw_paragraph('Продолжение начинается здесь', height-60*mm, 40*mm,
                        maximum=28, minimum=18, centered=True, bold=True)
         draw_paragraph('Новые истории и персональные книги для вашего ребёнка.', height-110*mm,

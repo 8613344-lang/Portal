@@ -161,13 +161,13 @@ def ranged_chunks(file, start, length):
 @require_http_methods(['GET', 'HEAD'])
 def private_file(request, path):
     file_field = None
-    book = Book.objects.filter(cover=path).first()
+    book = Book.objects.filter(Q(cover=path) | Q(background_image=path)).first()
     page = BookPage.objects.filter(Q(illustration=path) | Q(audio=path)).select_related('book').first()
     if page:
         book = page.book
         file_field = page.audio if page.audio.name == path else page.illustration
     elif book:
-        file_field = book.cover
+        file_field = book.background_image if book.background_image.name == path else book.cover
     if book:
         if not Book.objects.visible_to(request.user).filter(pk=book.pk).exists(): raise Http404
     else:

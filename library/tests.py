@@ -58,6 +58,120 @@ class PlatformTests(TestCase):
         self.client.force_login(self.b)
         self.assertEqual(self.client.get(reverse('book-export', args=[self.private.slug, 'pdf'])).status_code, 404)
 
+    def pdf_upload(self, scanned=False, count=2):
+        from reportlab.pdfgen.canvas import Canvas
+        from reportlab.lib.utils import ImageReader
+        buffer = BytesIO()
+        canvas = Canvas(buffer)
+        for number in range(count):
+            if scanned: canvas.drawImage(ImageReader(BytesIO(image_file().read())), 0, 0, width=595, height=842)
+            else: canvas.drawString(40, 700, f'PDF page {number+1} editable text')
+            canvas.showPage()
+        canvas.save()
+        return SimpleUploadedFile('book.pdf', buffer.getvalue(), content_type='application/pdf')
+
+    def test_pdf_alternating_full_bleed_picture_then_text(self):
+        from .exports import book_pdf
+        from pypdf import PdfReader
+        from pypdf.generic import ContentStream
+        self.private.pdf_layout = 'alternating'
+        output = book_pdf(self.private, [self.page])
+        pdf = PdfReader(output)
+        self.assertEqual(len(pdf.pages), 4)
+        self.assertEqual(pdf.pages[1].extract_text().strip(), '')
+        self.assertIn('Секретный текст', pdf.pages[2].extract_text())
+        matrices = [operands for operands, operator in ContentStream(pdf.pages[1].get_contents(), pdf).operations if operator == b'cm']
+        self.assertTrue(any(float(m[0]) >= float(pdf.pages[1].mediabox.width) and float(m[3]) >= float(pdf.pages[1].mediabox.height) for m in matrices))
+        output.close()
+
+    def test_background_choice_and_custom_image_requirements(self):
+        from django.core.exceptions import ValidationError
+        self.private.background_theme = 'custom'
+        with self.assertRaises(ValidationError): self.private.full_clean()
+        self.private.background_image = image_file()
+        self.private.full_clean(); self.private.save()
+        self.assertEqual(self.client.get(self.private.background_image.url).status_code, 404)
+        self.client.force_login(self.a)
+        response = self.client.get(self.private.background_image.url)
+        self.assertEqual(response.status_code, 200); response.close()
+        self.assertContains(self.client.get(reverse('reader', args=[self.private.slug])), 'background-custom')
+
+    def test_pdf_import_preserves_sheets_and_text_layer(self):
+        from .pdf_import import prepare_pdf, save_pdf_pages
+        prepared = prepare_pdf(self.pdf_upload())
+        try:
+            book = Book.objects.create(title='Импорт', slug='imported')
+            self.assertEqual(save_pdf_pages(book, prepared), 2)
+            page = book.pages.first()
+            self.assertTrue(page.pdf_full_page)
+            self.assertIn('editable text', page.text)
+            self.assertTrue(page.illustration.storage.exists(page.illustration.name))
+            self.assertEqual(book.visibility, 'restricted')
+            self.assertEqual(book.status, 'draft')
+            self.assertEqual(self.client.get(page.illustration.url).status_code, 404)
+        finally: prepared.close()
+
+    def test_scanned_pdf_import_and_export_does_not_duplicate_text_sheets(self):
+        from .pdf_import import prepare_pdf, save_pdf_pages
+        from .exports import book_pdf
+        from pypdf import PdfReader
+        prepared = prepare_pdf(self.pdf_upload(scanned=True))
+        try:
+            book = Book.objects.create(title='Скан', slug='scan', pdf_layout='alternating')
+            save_pdf_pages(book, prepared)
+            self.assertEqual(book.pages.first().text, '')
+            output = book_pdf(book, list(book.pages.all()))
+            self.assertEqual(len(PdfReader(output).pages), 4)
+            output.close()
+        finally: prepared.close()
+
+    def test_pdf_import_invalid_and_existing_book_rejected(self):
+        from .pdf_import import prepare_pdf, save_pdf_pages, PDFImportError
+        with self.assertRaises(PDFImportError): prepare_pdf(SimpleUploadedFile('bad.pdf', b'%PDF-fake'))
+        with self.assertRaises(PDFImportError): prepare_pdf(self.pdf_upload(count=101))
+        prepared = prepare_pdf(self.pdf_upload())
+        try:
+            with self.assertRaisesMessage(PDFImportError, 'уже есть страницы'):
+                save_pdf_pages(self.private, prepared)
+            self.assertEqual(self.private.pages.count(), 1)
+        finally: prepared.close()
+
+    def test_pdf_import_failure_rolls_back_rows_and_uploaded_images(self):
+        from .pdf_import import prepare_pdf, save_pdf_pages
+        prepared = prepare_pdf(self.pdf_upload())
+        book = Book.objects.create(title='Сбой', slug='failure')
+        files_before = set(Path(self.media.name).rglob('*.jpg'))
+        original = BookPage.save
+        def save(page, *args, **kwargs):
+            if page.position == 2: raise RuntimeError('test failure')
+            return original(page, *args, **kwargs)
+        try:
+            with patch.object(BookPage, 'save', save):
+                with self.assertRaises(RuntimeError): save_pdf_pages(book, prepared)
+            self.assertEqual(book.pages.count(), 0)
+            self.assertEqual(set(Path(self.media.name).rglob('*.jpg')), files_before)
+        finally: prepared.close()
+
+    def test_admin_creates_book_from_pdf_with_layout_and_background(self):
+        self.client.force_login(self.staff)
+        data = {'title':'Из PDF', 'slug':'admin-pdf', 'age_label':'Для чтения', 'status':'draft', 'visibility':'restricted',
+                'pdf_layout':'alternating', 'background_theme':'sky', 'source_pdf':self.pdf_upload(), '_save':'1'}
+        for prefix in ('pages','grants'):
+            data.update({f'{prefix}-TOTAL_FORMS':'0',f'{prefix}-INITIAL_FORMS':'0',f'{prefix}-MIN_NUM_FORMS':'0',f'{prefix}-MAX_NUM_FORMS':'1000'})
+        response = self.client.post(reverse('admin:library_book_add'), data)
+        self.assertEqual(response.status_code, 302, response.content[:1500])
+        book = Book.objects.get(slug='admin-pdf')
+        self.assertEqual(book.pages.count(), 2)
+        self.assertEqual(book.background_theme, 'sky')
+        self.assertEqual(book.pdf_layout, 'alternating')
+
+    def test_admin_pdf_requires_page_add_permission(self):
+        from .forms import BookAdminForm
+        form = BookAdminForm(data={'title':'PDF','slug':'denied','age_label':'Для чтения','pdf_layout':'combined',
+                                  'background_theme':'white','status':'draft','visibility':'restricted'}, files={'source_pdf':self.pdf_upload()})
+        self.assertFalse(form.is_valid())
+        self.assertIn('source_pdf', form.errors)
+
     @override_settings(SITE_URL='https://books.example.test')
     def test_pdf_contains_cyrillic_all_text_final_project_link_and_no_cache(self):
         from pypdf import PdfReader
