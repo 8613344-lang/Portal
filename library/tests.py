@@ -67,6 +67,41 @@ class PlatformTests(TestCase):
         self.assertContains(response, '<svg')
         self.assertContains(response, 'Продолжение начинается здесь')
 
+    def test_background_upload_activates_custom_theme(self):
+        self.private.background_image = image_file()
+        self.private.full_clean()
+        self.private.save()
+        self.private.refresh_from_db()
+        self.assertEqual(self.private.background_theme, 'custom')
+        self.client.force_login(self.a)
+        response = self.client.get(reverse('reader', args=[self.private.slug]))
+        self.assertContains(response, "background-image:url('" + self.private.background_image.url)
+        self.private.background_theme = 'sky'
+        self.private.full_clean()
+        self.assertEqual(self.private.background_theme, 'sky')
+
+    def test_custom_background_is_embedded_on_full_image_pdf_leaves(self):
+        from .exports import book_pdf
+        from pypdf import PdfReader
+        self.private.background_image = image_file()
+        self.private.cover = image_file()
+        self.private.ending_image = image_file()
+        self.private.cover_full_page = self.private.ending_full_page = True
+        self.private.full_clean()
+        self.private.save()
+        self.page.pdf_full_page = True
+        # Distinct foreground data prevents PDF image deduplication.
+        buf = BytesIO()
+        Image.new('RGB', (100, 50), '#446699').save(buf, 'JPEG')
+        self.page.illustration = SimpleUploadedFile('foreground.jpg', buf.getvalue())
+        self.page.save()
+        self.private.cover = self.private.ending_image = self.page.illustration
+        with book_pdf(self.private, [self.page]) as output:
+            pages = PdfReader(output).pages
+            self.assertEqual(len(pages), 3)
+            for page in pages:
+                self.assertEqual(len(page['/Resources']['/XObject']), 2)
+
     def test_full_cover_has_no_text_or_number_and_source_sheet_not_duplicated(self):
         from .exports import book_pdf
         from .sheets import book_sheets

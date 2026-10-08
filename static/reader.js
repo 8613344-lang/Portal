@@ -24,6 +24,7 @@ if (reader && document.querySelector('#auto-toggle')) {
     observer.disconnect();
     const page = reader.querySelector('.reading-page');
     if (page) {
+      document.body.style.setProperty('--book-background', getComputedStyle(page).backgroundImage);
       observer.observe(page);
       page.querySelectorAll('img').forEach(image => image.addEventListener('load', fitPage, {once:true}));
     }
@@ -47,6 +48,7 @@ if (reader && document.querySelector('#auto-toggle')) {
       showControls();
       document.activeElement.blur();
     } else {
+      document.body.style.removeProperty('--book-background');
       observer.disconnect();
       clearTimeout(controlsTimer);
       document.body.classList.remove('focus-controls-visible');

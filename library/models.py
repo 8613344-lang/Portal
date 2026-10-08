@@ -51,6 +51,8 @@ class Book(models.Model):
     def __str__(self): return self.title
     def clean(self):
         from django.core.exceptions import ValidationError
+        if self.background_image and not self.background_image._committed:
+            self.background_theme = 'custom'
         self.cover = normalize_image(self.cover)
         self.background_image = normalize_image(self.background_image)
         self.ending_image = normalize_image(self.ending_image)

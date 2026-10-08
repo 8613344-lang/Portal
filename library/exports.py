@@ -58,12 +58,15 @@ def book_pdf(book, pages):
         # Ignore unsupported decorative emoji instead of printing replacement boxes/stars.
         return escape(''.join(c for c in value if ord(c) in glyphs or c in '\n\t'))
 
-    def background(number):
+    def sheet_base():
         palette = {'paper':'#fcf5e8', 'white':'#ffffff', 'mint':'#edf5ed', 'sky':'#edf4fb', 'rose':'#fbefef'}
         canvas.setFillColor(colors.HexColor(palette.get(book.background_theme, '#fcf5e8')))
         canvas.rect(0, 0, width, height, stroke=0, fill=1)
         if book.background_theme == 'custom' and book.background_image:
             full_picture(book.background_image)
+
+    def background(number):
+        sheet_base()
         canvas.setStrokeColor(colors.HexColor('#dfd0b5'))
         canvas.roundRect(10*mm, 10*mm, width-20*mm, height-20*mm, 4*mm, stroke=1, fill=0)
         canvas.setFillColor(colors.HexColor('#e6eddf'))
@@ -133,8 +136,7 @@ def book_pdf(book, pages):
 
     try:
         if cover_sheet.pdf_full_page and cover_sheet.illustration:
-            canvas.setFillColor(colors.white)
-            canvas.rect(0,0,width,height,stroke=0,fill=1)
+            sheet_base()
             full_picture(cover_sheet.illustration, preserve=True)
         else:
             background(None)
@@ -146,14 +148,14 @@ def book_pdf(book, pages):
         leaf_number = 2
         for index, page in enumerate(pages, 1):
             if page.pdf_full_page and page.illustration:
-                canvas.setFillColor(colors.white)
-                canvas.rect(0, 0, width, height, stroke=0, fill=1)
+                sheet_base()
                 full_picture(page.illustration, preserve=True)
                 canvas.showPage()
                 leaf_number += 1
                 continue
             alternating = book.pdf_layout == 'alternating'
             if alternating and page.illustration:
+                sheet_base()
                 full_picture(page.illustration)
                 canvas.showPage()
                 leaf_number += 1
@@ -175,8 +177,7 @@ def book_pdf(book, pages):
             leaf_number += 1
         end_picture = ending_sheet.illustration
         if end_picture and ending_sheet.pdf_full_page:
-            canvas.setFillColor(colors.white)
-            canvas.rect(0,0,width,height,stroke=0,fill=1)
+            sheet_base()
             full_picture(end_picture, preserve=True)
         else:
             background(leaf_number)
