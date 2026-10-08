@@ -12,6 +12,8 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods, require_POST
 from .forms import OrderForm, PageAudioForm, RegistrationForm
 from .models import Book, BookPage, Notification, NotificationRecipient, Order
+from .sheets import book_sheets, project_qr
+from django.urls import reverse
 
 def home(request):
     examples = Book.objects.filter(status='published', visibility='public')[:3]
@@ -44,13 +46,15 @@ def register(request):
 @never_cache
 def reader(request, slug):
     book = get_object_or_404(Book.objects.visible_to(request.user), slug=slug)
-    pages = list(book.pages.all())
+    pages = book_sheets(book, list(book.pages.all()))
     try: number = int(request.GET.get('page', '1'))
     except ValueError: number = 1
     number = max(1, min(number, len(pages)))
     current = pages[number - 1] if pages else None
-    can_edit = request.user.is_authenticated and request.user.is_staff and request.user.has_perm('library.change_bookpage')
-    return render(request, 'library/reader.html', {'book': book, 'pages': pages, 'current': current, 'number': number, 'total': len(pages), 'previous': number - 1, 'next': number + 1, 'can_edit': can_edit, 'audio_form': PageAudioForm(), 'audio_count': sum(bool(p.audio) for p in pages)})
+    permission = 'library.change_bookpage' if current.kind == 'story' else 'library.change_book'
+    can_edit = request.user.is_authenticated and request.user.is_staff and request.user.has_perm(permission)
+    audio_action = reverse('page-audio', args=[current.pk]) if current.kind == 'story' else reverse('sheet-audio', args=[book.slug, current.kind])
+    return render(request, 'library/reader.html', {'book': book, 'pages': pages, 'current': current, 'number': number, 'total': len(pages), 'previous': number - 1, 'next': number + 1, 'can_edit': can_edit, 'audio_form': PageAudioForm(), 'audio_action':audio_action, 'project_qr':project_qr() if current.kind == 'ending' and book.ending_show_qr else '', 'audio_count': sum(bool(p.audio) for p in pages)})
 
 @never_cache
 @require_http_methods(['GET'])
@@ -64,7 +68,7 @@ def export_book(request, slug, format):
         return response
     try:
         pages = list(book.pages.all())
-        output = book_pdf(book, pages) if format == 'pdf' else book_mp3(book, pages)
+        output = book_pdf(book, pages) if format == 'pdf' else book_mp3(book, book_sheets(book, pages))
         response = FileResponse(output, as_attachment=True, filename=f'{book.slug}.{format}',
                                 content_type='application/pdf' if format == 'pdf' else 'audio/mpeg')
         response['Cache-Control'] = 'private, no-store'
@@ -96,9 +100,31 @@ def page_audio(request, pk):
             messages.success(request, 'Запись сохранена на сервере.')
         else:
             messages.error(request, ' '.join(str(error) for errors in form.errors.values() for error in errors))
-    index = list(page.book.pages.values_list('pk', flat=True)).index(page.pk) + 1
+    sequence = book_sheets(page.book, list(page.book.pages.all()))
+    index = next((n for n,p in enumerate(sequence,1) if p.pk == page.pk), 1)
     from django.urls import reverse
     return redirect(reverse('reader', args=[page.book.slug]) + f'?page={index}#page-audio')
+
+@require_POST
+@login_required
+@never_cache
+def sheet_audio(request, slug, kind):
+    if kind not in ('cover','ending') or not request.user.is_staff or not request.user.has_perm('library.change_book'):
+        raise Http404
+    book = get_object_or_404(Book, slug=slug)
+    field = kind+'_audio'
+    if request.POST.get('action') == 'remove':
+        setattr(book, field, '')
+        book.save(update_fields=[field])
+    else:
+        form = PageAudioForm(request.POST, request.FILES)
+        if form.is_valid():
+            setattr(book, field, form.cleaned_data['audio'])
+            book.save(update_fields=[field])
+        else:
+            messages.error(request, ' '.join(str(e) for errors in form.errors.values() for e in errors))
+    index = 1 if kind == 'cover' else len(book_sheets(book, list(book.pages.all())))
+    return redirect(reverse('reader', args=[book.slug])+f'?page={index}#page-audio')
 
 @never_cache
 @require_http_methods(['GET', 'POST'])
@@ -157,17 +183,21 @@ def ranged_chunks(file, start, length):
             yield chunk
     finally: file.close()
 
+def ranged_field_chunks(field, start, length):
+    with field.open('rb') as file:
+        yield from ranged_chunks(file, start, length)
+
 @never_cache
 @require_http_methods(['GET', 'HEAD'])
 def private_file(request, path):
     file_field = None
-    book = Book.objects.filter(Q(cover=path) | Q(background_image=path)).first()
+    book = Book.objects.filter(Q(cover=path) | Q(background_image=path) | Q(cover_audio=path) | Q(ending_image=path) | Q(ending_audio=path)).first()
     page = BookPage.objects.filter(Q(illustration=path) | Q(audio=path)).select_related('book').first()
     if page:
         book = page.book
         file_field = page.audio if page.audio.name == path else page.illustration
     elif book:
-        file_field = book.background_image if book.background_image.name == path else book.cover
+        file_field = next(getattr(book, name) for name in ('cover','background_image','cover_audio','ending_image','ending_audio') if getattr(book,name).name == path)
     if book:
         if not Book.objects.visible_to(request.user).filter(pk=book.pk).exists(): raise Http404
     else:
@@ -200,8 +230,7 @@ def private_file(request, path):
     length = end - start + 1
     if request.method == 'HEAD': response = HttpResponse(content_type=mime, status=status)
     else:
-        file = file_field.open('rb')
-        response = StreamingHttpResponse(ranged_chunks(file, start, length), content_type=mime, status=status)
+        response = StreamingHttpResponse(ranged_field_chunks(file_field, start, length), content_type=mime, status=status)
     response['Content-Length'] = str(length)
     response['Accept-Ranges'] = 'bytes'
     response['Content-Disposition'] = 'inline; filename="page-audio' + ('.mp3"' if mime == 'audio/mpeg' else '.wav"' if mime == 'audio/wav' else '.jpg"')

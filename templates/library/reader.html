@@ -10,7 +10,7 @@
     <div class="book-downloads">
       <a class="button secondary" href="{% url 'book-export' book.slug 'pdf' %}">Скачать книгу PDF</a>
       {% if audio_count %}<a class="button secondary" href="{% url 'book-export' book.slug 'mp3' %}">Скачать аудиокнигу MP3</a>{% endif %}
-      <p class="muted">PDF: обложка, иллюстрации и QR-код сайта. {% if audio_count %}В MP3 войдут записи {{ audio_count }} из {{ total }} страниц по порядку.{% else %}Для MP3 сначала добавьте записи страниц.{% endif %}</p>
+      <p class="muted">PDF: обложка, иллюстрации и последняя страница. {% if audio_count %}В MP3 войдут записи {{ audio_count }} из {{ total }} страниц по порядку.{% else %}Для MP3 сначала добавьте записи страниц.{% endif %}</p>
     </div>
     {% if current %}<div class="auto-reader">
       <button class="button primary" id="auto-toggle" type="button" aria-pressed="false">▶ Автоматическое чтение</button>
@@ -29,11 +29,26 @@
   <div class="reader-layout">
     <aside class="contents"><p class="eyebrow">СОДЕРЖАНИЕ</p><ol>{% for page in pages %}<li><a class="{% if page.pk == current.pk %}active{% endif %}" href="?page={{ forloop.counter }}"><span>{{ forloop.counter|stringformat:'02d' }}</span>{{ page.title }}</a></li>{% endfor %}</ol></aside>
     <div class="reader-main">
-      <article class="reading-page background-{{ book.background_theme }}{% if current.pdf_full_page %} pdf-leaf{% endif %}"{% if book.background_theme == 'custom' and book.background_image %} style="background-image:url('{{ book.background_image.url }}')"{% endif %}>{% if current.pdf_full_page %}<h1 class="sr-only">{{ current.title }}</h1>{% if current.illustration %}<img class="page-illustration" src="{{ current.illustration.url }}" alt="Лист PDF: {{ current.title }}">{% endif %}{% else %}<p class="eyebrow">СТРАНИЦА {{ number }} / {{ total }}</p><h1>{{ current.title }}</h1>{% if current.illustration %}<img class="page-illustration" src="{{ current.illustration.url }}" alt="{{ current.title }}">{% endif %}<div class="story-text">{{ current.text|linebreaks }}</div>{% endif %}</article>
+      <article class="reading-page background-{{ book.background_theme }}{% if current.pdf_full_page %} pdf-leaf{% endif %}"{% if book.background_theme == 'custom' and book.background_image %} style="background-image:url('{{ book.background_image.url }}')"{% endif %}>
+        {% if current.pdf_full_page %}
+          <h1 class="sr-only">{{ current.display_title|default:current.title }}</h1>
+          {% if current.illustration %}<img class="page-illustration" src="{{ current.illustration.url }}" alt="{{ current.title }}">{% endif %}
+          {% if current.kind == 'ending' %}{% if book.ending_show_text or book.ending_show_qr %}<div class="sheet-overlay">
+            {% if book.ending_show_text %}<div class="ending-copy"><h2>{{ book.ending_title }}</h2><div>{{ book.ending_text|linebreaks }}</div></div>{% endif %}
+            {% if book.ending_show_qr %}<a class="project-qr" href="{% url 'home' %}" aria-label="Сайт проекта">{{ project_qr|safe }}</a>{% endif %}
+          </div>{% endif %}{% endif %}
+        {% else %}
+          <p class="eyebrow">{% if current.kind == 'cover' %}ОБЛОЖКА{% elif current.kind == 'ending' %}ПОСЛЕДНЯЯ СТРАНИЦА{% else %}СТРАНИЦА {{ number }} / {{ total }}{% endif %}</p>
+          {% if current.kind != 'ending' or book.ending_show_text %}<h1>{{ current.display_title|default:current.title }}</h1>{% endif %}
+          {% if current.illustration %}<img class="page-illustration" src="{{ current.illustration.url }}" alt="{{ current.title }}">{% endif %}
+          {% if current.kind != 'ending' or book.ending_show_text %}<div class="story-text">{{ current.text|linebreaks }}</div>{% endif %}
+          {% if current.kind == 'ending' and book.ending_show_qr %}<a class="project-qr" href="{% url 'home' %}" aria-label="Сайт проекта">{{ project_qr|safe }}</a>{% endif %}
+        {% endif %}
+      </article>
       <section class="audio-panel" id="page-audio">
         <div><span class="audio-symbol">♫</span><div><h2>Послушать страницу</h2><p>{% if current.audio %}{{ current.title }}{% else %}Для этой страницы запись ещё не добавлена{% endif %}</p></div></div>
         {% if current.audio %}<audio controls preload="metadata" src="{{ current.audio.url }}" aria-label="Озвучка: {{ current.title }}"></audio>{% endif %}
-        {% if can_edit %}<details class="audio-edit"><summary>{% if current.audio %}Заменить запись{% else %}Добавить MP3 / WAV{% endif %}</summary><form method="post" action="{% url 'page-audio' current.pk %}" enctype="multipart/form-data">{% csrf_token %}{{ audio_form.as_p }}<p class="muted">MP3 или WAV до 100 МБ. Запись сохранится для всех читателей этой книги.</p><button class="button primary">Сохранить запись</button></form>{% if current.audio %}<form method="post" action="{% url 'page-audio' current.pk %}">{% csrf_token %}<input type="hidden" name="action" value="remove"><button class="text-link danger">Удалить запись</button></form>{% endif %}</details>{% endif %}
+        {% if can_edit %}<details class="audio-edit"><summary>{% if current.audio %}Заменить запись{% else %}Добавить MP3 / WAV{% endif %}</summary><form method="post" action="{{ audio_action }}" enctype="multipart/form-data">{% csrf_token %}{{ audio_form.as_p }}<p class="muted">MP3 или WAV до 100 МБ. Запись сохранится для всех читателей этой книги.</p><button class="button primary">Сохранить запись</button></form>{% if current.audio %}<form method="post" action="{{ audio_action }}">{% csrf_token %}<input type="hidden" name="action" value="remove"><button class="text-link danger">Удалить запись</button></form>{% endif %}</details>{% endif %}
       </section>
       <nav class="page-navigation" aria-label="Страницы книги">{% if number > 1 %}<a class="button secondary" href="?page={{ previous }}">← Предыдущая</a>{% else %}<span></span>{% endif %}<span>{{ number }} / {{ total }}</span>{% if number < total %}<a class="button primary" href="?page={{ next }}">Следующая →</a>{% else %}<a class="button secondary" href="{% url 'catalog' %}">Другие истории ↗</a>{% endif %}</nav>
     </div>

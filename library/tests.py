@@ -58,6 +58,95 @@ class PlatformTests(TestCase):
         self.client.force_login(self.b)
         self.assertEqual(self.client.get(reverse('book-export', args=[self.private.slug, 'pdf'])).status_code, 404)
 
+    def test_cover_is_first_and_ending_is_last_in_reader(self):
+        response = self.client.get(reverse('reader', args=[self.public.slug]))
+        self.assertEqual(response.context['current'].kind, 'cover')
+        self.assertEqual(response.context['total'], 3)
+        response = self.client.get(reverse('reader', args=[self.public.slug])+'?page=3')
+        self.assertEqual(response.context['current'].kind, 'ending')
+        self.assertContains(response, '<svg')
+        self.assertContains(response, 'Продолжение начинается здесь')
+
+    def test_full_cover_has_no_text_or_number_and_source_sheet_not_duplicated(self):
+        from .exports import book_pdf
+        from .sheets import book_sheets
+        from pypdf import PdfReader
+        self.private.cover_page = self.page
+        self.private.cover_full_page = True
+        self.private.full_clean(); self.private.save()
+        sequence = book_sheets(self.private, list(self.private.pages.all()))
+        self.assertEqual([p.kind for p in sequence], ['cover','ending'])
+        output = book_pdf(self.private, list(self.private.pages.all()))
+        pdf = PdfReader(output)
+        self.assertEqual(len(pdf.pages), 2)
+        self.assertEqual(pdf.pages[0].extract_text().strip(), '')
+        output.close()
+
+    def test_styled_cover_has_no_page_number(self):
+        from .exports import book_pdf
+        from pypdf import PdfReader
+        output = book_pdf(self.public, list(self.public.pages.all()))
+        lines = PdfReader(output).pages[0].extract_text().splitlines()
+        self.assertNotIn('1', lines)
+        output.close()
+
+    def test_last_picture_supports_all_qr_text_combinations(self):
+        from .exports import book_pdf
+        from pypdf import PdfReader
+        self.public.ending_image = image_file()
+        self.public.ending_full_page = True
+        self.public.full_clean(); self.public.save()
+        for qr in (False, True):
+            for text in (False, True):
+                self.public.ending_show_qr = qr
+                self.public.ending_show_text = text
+                output = book_pdf(self.public, list(self.public.pages.all()))
+                leaf = PdfReader(output).pages[-1]
+                self.assertEqual('Продолжение начинается здесь' in ' '.join(leaf.extract_text().split()), text)
+                self.assertEqual(bool(leaf.get('/Annots')), qr)
+                if not text: self.assertEqual(leaf.extract_text().strip(), '')
+                output.close()
+
+    def test_selected_sheets_must_belong_to_book_and_be_different(self):
+        from django.core.exceptions import ValidationError
+        self.public.cover_page = self.page
+        with self.assertRaises(ValidationError): self.public.full_clean()
+        self.private.cover_page = self.page
+        self.private.ending_page = self.page
+        with self.assertRaises(ValidationError): self.private.full_clean()
+
+    def test_special_audio_upload_delete_validation_and_privacy(self):
+        for kind in ('cover','ending'):
+            url = reverse('sheet-audio', args=[self.private.slug, kind])
+            self.client.force_login(self.a)
+            self.assertEqual(self.client.post(url, {'audio':wav_file()}).status_code, 404)
+            self.client.force_login(self.staff)
+            self.assertEqual(self.client.post(url, {'audio':wav_file()}).status_code, 302)
+            self.private.refresh_from_db()
+            audio = getattr(self.private, kind+'_audio')
+            self.client.logout()
+            self.assertEqual(self.client.get(audio.url).status_code, 404)
+            self.client.force_login(self.a)
+            response = self.client.get(audio.url, HTTP_RANGE='bytes=0-10')
+            self.assertEqual(response.status_code, 206); response.close()
+            self.client.force_login(self.staff)
+            old_name = audio.name
+            self.client.post(url, {'audio':SimpleUploadedFile('fake.mp3',b'fake')})
+            self.private.refresh_from_db()
+            self.assertEqual(getattr(self.private,kind+'_audio').name,old_name)
+            self.client.post(url, {'action':'remove'})
+            self.private.refresh_from_db()
+            self.assertFalse(getattr(self.private,kind+'_audio'))
+
+    def test_complete_mp3_includes_cover_story_and_ending_audio(self):
+        from .exports import book_mp3
+        from mutagen.mp3 import MP3
+        self.private.cover_audio.save('cover.wav', wav_file())
+        self.private.ending_audio.save('ending.wav', wav_file())
+        output = book_mp3(self.private, list(self.private.pages.all()))
+        self.assertAlmostEqual(MP3(output).info.length, 3, delta=.2)
+        output.close()
+
     def pdf_upload(self, scanned=False, count=2):
         from reportlab.pdfgen.canvas import Canvas
         from reportlab.lib.utils import ImageReader
@@ -293,7 +382,7 @@ class PlatformTests(TestCase):
         self.assertEqual(self.client.get(reverse('reader', args=['private'])).status_code, 404)
     def test_granted_reader_can_read(self):
         self.client.force_login(self.a)
-        response = self.client.get(reverse('reader', args=['private']))
+        response = self.client.get(reverse('reader', args=['private'])+'?page=2')
         self.assertContains(response, 'Секретный текст')
         self.assertContains(response, '<audio')
         self.assertNotContains(response, 'speechSynthesis')
@@ -396,7 +485,7 @@ class PlatformTests(TestCase):
         self.page.text = '<script>alert(1)</script>'
         self.page.save()
         self.client.force_login(self.a)
-        response = self.client.get(reverse('reader', args=['private']))
+        response = self.client.get(reverse('reader', args=['private'])+'?page=2')
         self.assertContains(response, '&lt;script&gt;')
         self.assertNotContains(response, '<script>alert')
     def test_guest_orders_not_visible_to_arbitrary_registered_user(self):

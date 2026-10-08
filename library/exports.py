@@ -21,6 +21,10 @@ font_lock = threading.Lock()
 
 def book_pdf(book, pages):
     """A4 combined/alternating layouts; imported PDF leaves preserve their source."""
+    from .sheets import book_sheets
+    sequence = book_sheets(book, pages)
+    cover_sheet, ending_sheet = sequence[0], sequence[-1]
+    pages = sequence[1:-1]
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_CENTER
     from reportlab.lib.pagesizes import A4
@@ -66,7 +70,7 @@ def book_pdf(book, pages):
         canvas.circle(width-14*mm, height-14*mm, 8*mm, stroke=0, fill=1)
         canvas.setFont('BookSerif', 9)
         canvas.setFillColor(ink)
-        canvas.drawCentredString(width/2, 13*mm, str(number))
+        if number is not None: canvas.drawCentredString(width/2, 13*mm, str(number))
 
     def fit_paragraph(value, available_width, available_height, maximum=14, minimum=9,
                       bold=False, centered=False, identifier=''):
@@ -128,12 +132,16 @@ def book_pdf(book, pages):
         canvas.restoreState()
 
     try:
-        background(1)
-        draw_paragraph('КНИГИ РЯДОМ', height-28*mm, 10*mm, maximum=12, centered=True)
-        draw_paragraph(text(book.title), height-45*mm, 45*mm, maximum=30, minimum=16, bold=True, centered=True)
-        cover = book.cover or next((p.illustration for p in pages if p.illustration), None)
-        picture(cover, height-100*mm, 140*mm)
-        draw_paragraph(text(book.age_label), 42*mm, 15*mm, maximum=13, centered=True)
+        if cover_sheet.pdf_full_page and cover_sheet.illustration:
+            canvas.setFillColor(colors.white)
+            canvas.rect(0,0,width,height,stroke=0,fill=1)
+            full_picture(cover_sheet.illustration, preserve=True)
+        else:
+            background(None)
+            draw_paragraph('КНИГИ РЯДОМ', height-28*mm, 10*mm, maximum=12, centered=True)
+            draw_paragraph(text(book.title), height-45*mm, 45*mm, maximum=30, minimum=16, bold=True, centered=True)
+            picture(cover_sheet.illustration, height-100*mm, 140*mm)
+            draw_paragraph(text(book.age_label), 42*mm, 15*mm, maximum=13, centered=True)
         canvas.showPage()
         leaf_number = 2
         for index, page in enumerate(pages, 1):
@@ -165,20 +173,43 @@ def book_pdf(book, pages):
                            identifier=page.title)
             canvas.showPage()
             leaf_number += 1
-        background(leaf_number)
-        draw_paragraph('Продолжение начинается здесь', height-60*mm, 40*mm,
-                       maximum=28, minimum=18, centered=True, bold=True)
-        draw_paragraph('Новые истории и персональные книги для вашего ребёнка.', height-110*mm,
-                       30*mm, maximum=14, centered=True)
+        end_picture = ending_sheet.illustration
+        if end_picture and ending_sheet.pdf_full_page:
+            canvas.setFillColor(colors.white)
+            canvas.rect(0,0,width,height,stroke=0,fill=1)
+            full_picture(end_picture, preserve=True)
+        else:
+            background(leaf_number)
+            if end_picture: full_picture(end_picture, preserve=True)
         url = settings.SITE_URL.rstrip('/')+'/'
-        qr = QrCodeWidget(url)
-        bounds = qr.getBounds()
-        size = 55*mm
-        drawing = Drawing(size, size, transform=[size/(bounds[2]-bounds[0]),0,0,size/(bounds[3]-bounds[1]),0,0])
-        drawing.add(qr)
-        renderPDF.draw(drawing, canvas, (width-size)/2, 75*mm)
-        draw_paragraph(escape(url), 62*mm, 30*mm, maximum=12, minimum=8, centered=True)
-        canvas.linkURL(url, ((width-size)/2,75*mm,(width+size)/2,130*mm), relative=0)
+        if end_picture and (book.ending_show_text or book.ending_show_qr):
+            canvas.saveState()
+            canvas.setFillColor(colors.white)
+            canvas.setFillAlpha(.93)
+            canvas.roundRect(margin, 22*mm, content_width, 88*mm, 4*mm, fill=1,stroke=0)
+            canvas.restoreState()
+        if book.ending_show_text:
+            if end_picture:
+                available_width = content_width-58*mm if book.ending_show_qr else content_width-12*mm
+                value = '<b>'+text(book.ending_title)+'</b><br/><br/>'+text(book.ending_text).replace('\n','<br/>') if book.ending_title else text(book.ending_text).replace('\n','<br/>')
+                # Use a registered bold family for <b> in the overlay.
+                pdfmetrics.registerFontFamily('BookSerif',normal='BookSerif',bold='BookSerifBold')
+                paragraph, used = fit_paragraph(value, available_width, 70*mm, maximum=14, minimum=9, identifier='Последняя страница')
+                paragraph.drawOn(canvas,margin+6*mm,100*mm-used)
+            else:
+                draw_paragraph(text(book.ending_title),height-60*mm,40*mm,maximum=28,minimum=18,centered=True,bold=True)
+                draw_paragraph(text(book.ending_text).replace('\n','<br/>'),height-110*mm,40*mm,maximum=14,centered=True)
+        if book.ending_show_qr:
+            qr = QrCodeWidget(url)
+            bounds = qr.getBounds()
+            size = (44 if end_picture else 55)*mm
+            drawing = Drawing(size,size,transform=[size/(bounds[2]-bounds[0]),0,0,size/(bounds[3]-bounds[1]),0,0])
+            drawing.add(qr)
+            x = width-margin-size-6*mm if end_picture else (width-size)/2
+            y = 34*mm if end_picture else 75*mm
+            renderPDF.draw(drawing,canvas,x,y)
+            canvas.linkURL(url,(x,y,x+size,y+size),relative=0)
+            if not end_picture: draw_paragraph(escape(url),62*mm,30*mm,maximum=12,minimum=8,centered=True)
         canvas.showPage()
         canvas.save()
         output.seek(0)
@@ -192,6 +223,8 @@ def book_pdf(book, pages):
 def book_mp3(book, pages):
     """Decode to a common PCM format before joining: handles differing MP3/WAV rates."""
     import imageio_ffmpeg
+    from .sheets import book_sheets
+    if not pages or getattr(pages[0], "kind", None) != "cover": pages = book_sheets(book, pages)
     recordings = [page for page in pages if page.audio]
     if not recordings: raise ExportError('В книге пока нет аудиозаписей.')
     executable = imageio_ffmpeg.get_ffmpeg_exe()

@@ -27,7 +27,9 @@ class BookAdmin(admin.ModelAdmin):
     prepopulated_fields = {'slug': ['title']}
     inlines = [PageInline, AccessInline]
     view_on_site = False
-    fieldsets = [('Книга', {'fields': ('title', 'slug', 'description', 'child_name', 'age_label', 'cover')}),
+    fieldsets = [('Книга', {'fields': ('title', 'slug', 'description', 'child_name', 'age_label')}),
+                 ('Обложка', {'fields': ('cover', 'cover_page', 'cover_full_page', 'cover_audio')}),
+                 ('Последняя страница', {'fields': ('ending_image', 'ending_page', 'ending_full_page', 'ending_audio', 'ending_show_qr', 'ending_show_text', 'ending_title', 'ending_text')}),
                  ('Оформление и PDF', {'fields': ('pdf_layout', 'background_theme', 'background_image')}),
                  ('Импорт из PDF', {'fields': ('source_pdf',), 'description': 'При создании книги загрузите PDF: все листы автоматически станут страницами. Без текстового слоя листы сохраняются картинками.'}),
                  ('Публикация и доступ', {'fields': ('status', 'visibility')})]
@@ -36,6 +38,11 @@ class BookAdmin(admin.ModelAdmin):
         form = super().get_form(request, obj, **kwargs)
         class AuthorizedBookForm(form):
             can_import_pdf = request.user.has_perm('library.add_bookpage')
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                for field in ('cover_page', 'ending_page'):
+                    if field in self.fields:
+                        self.fields[field].queryset = BookPage.objects.filter(book=obj) if obj else BookPage.objects.none()
         return AuthorizedBookForm
 
     def save_related(self, request, form, formsets, change):

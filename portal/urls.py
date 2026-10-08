@@ -10,6 +10,7 @@ urlpatterns = [
     path('books/<slug:slug>/', views.reader, name='reader'),
     path('books/<slug:slug>/download/<str:format>/', views.export_book, name='book-export'),
     path('pages/<int:pk>/audio/', views.page_audio, name='page-audio'),
+    path('books/<slug:slug>/audio/<str:kind>/', views.sheet_audio, name='sheet-audio'),
     path('account/', views.account, name='account'),
     path('order/', views.order_create, name='order'),
     path('order/success/', views.order_success, name='order-success'),

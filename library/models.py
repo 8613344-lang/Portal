@@ -26,6 +26,17 @@ class Book(models.Model):
     child_name = models.CharField('Имя героя', max_length=100, blank=True)
     age_label = models.CharField('Возраст читателей', max_length=60, default='Для детей от 2 до 5 лет')
     cover = models.FileField('Обложка', upload_to=private_path, blank=True)
+    cover_full_page = models.BooleanField('Обложка целиком из картинки', default=False)
+    cover_page = models.ForeignKey('BookPage', verbose_name='Лист книги для обложки', null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    cover_audio = models.FileField('Озвучка обложки MP3 / WAV', upload_to=private_path, blank=True, validators=[validate_audio])
+    ending_image = models.FileField('Картинка последней страницы', upload_to=private_path, blank=True)
+    ending_full_page = models.BooleanField('Последняя страница целиком из картинки', default=False)
+    ending_page = models.ForeignKey('BookPage', verbose_name='Лист книги для последней страницы', null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
+    ending_audio = models.FileField('Озвучка последней страницы MP3 / WAV', upload_to=private_path, blank=True, validators=[validate_audio])
+    ending_show_qr = models.BooleanField('Показывать QR-код на последней странице', default=True)
+    ending_show_text = models.BooleanField('Показывать текст на последней странице', default=True)
+    ending_title = models.CharField('Заголовок последней страницы', max_length=200, blank=True, default='Продолжение начинается здесь')
+    ending_text = models.TextField('Текст последней страницы', blank=True, default='Новые истории и персональные книги для вашего ребёнка.')
     pdf_layout = models.CharField('Вариант выгрузки PDF', max_length=20, default='combined', choices=[('combined', 'Картинка и текст на одном листе'), ('alternating', 'Полный лист картинки, затем лист текста')])
     background_theme = models.CharField('Фон книги', max_length=20, default='paper', choices=[('paper', 'Тёплая бумага'), ('white', 'Белый'), ('mint', 'Мятный'), ('sky', 'Небесный'), ('rose', 'Розовый'), ('custom', 'Своя картинка')])
     background_image = models.FileField('Своя картинка фона', upload_to=private_path, blank=True, help_text='JPEG, PNG или WebP; фон используется в просмотрщике и PDF.')
@@ -42,6 +53,19 @@ class Book(models.Model):
         from django.core.exceptions import ValidationError
         self.cover = normalize_image(self.cover)
         self.background_image = normalize_image(self.background_image)
+        self.ending_image = normalize_image(self.ending_image)
+        for field in ('cover_page', 'ending_page'):
+            page = getattr(self, field)
+            if page and page.book_id != self.pk:
+                raise ValidationError({field: 'Выберите страницу этой книги.'})
+            if page and not page.illustration:
+                raise ValidationError({field: 'Выбранный лист должен содержать картинку.'})
+        if self.cover_page_id and self.cover_page_id == self.ending_page_id:
+            raise ValidationError({'ending_page': 'Обложка и последняя страница должны быть разными листами.'})
+        if self.cover_full_page and not (self.cover or self.cover_page_id):
+            raise ValidationError({'cover': 'Загрузите обложку или выберите лист книги.'})
+        if self.ending_full_page and not (self.ending_image or self.ending_page_id):
+            raise ValidationError({'ending_image': 'Загрузите финальную картинку или выберите лист книги.'})
         if self.background_theme == 'custom' and not self.background_image:
             raise ValidationError({'background_image': 'Для своего фона загрузите картинку.'})
 
