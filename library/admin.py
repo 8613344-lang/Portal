@@ -1,5 +1,7 @@
 from django.contrib import admin
 from django.utils import timezone
+from django.utils.html import format_html
+import uuid
 from .models import Book, BookPage, BookAccess, Order, NotificationRecipient, Notification
 from .forms import BookAdminForm
 
@@ -20,6 +22,21 @@ class AccessInline(admin.TabularInline):
 
 @admin.register(Book)
 class BookAdmin(admin.ModelAdmin):
+    readonly_fields = ['viewing_link']
+    actions = ['rotate_viewing_links']
+
+    @admin.display(description='Ссылка «Только страница» и QR')
+    def viewing_link(self, obj):
+        if not obj or not obj.pk: return 'Ссылка появится после сохранения книги.'
+        return format_html('<a href="{}" target="_blank" rel="noopener">{}</a>', obj.share_url, obj.share_url)
+
+    @admin.action(description='Создать новые ссылки просмотра (отозвать старые)', permissions=['change'])
+    def rotate_viewing_links(self, request, queryset):
+        for book in queryset:
+            book.share_token = uuid.uuid4()
+            book.save(update_fields=['share_token'])
+        self.message_user(request, 'Созданы новые ссылки. Старые ссылки и QR-коды больше не работают; выгрузите PDF заново.')
+
     form = BookAdminForm
     list_display = ['title', 'status', 'visibility', 'created_at']
     list_filter = ['status', 'visibility', 'pdf_layout', 'background_theme']
@@ -32,7 +49,7 @@ class BookAdmin(admin.ModelAdmin):
                  ('Последняя страница', {'fields': ('ending_image', 'ending_page', 'ending_full_page', 'ending_audio', 'ending_show_qr', 'ending_show_text', 'ending_title', 'ending_text', 'ending_panel_color', 'ending_panel_transparency', 'ending_text_color', 'ending_qr_color')}),
                  ('Оформление и PDF', {'fields': ('pdf_layout', 'background_theme', 'background_image')}),
                  ('Импорт из PDF', {'fields': ('source_pdf',), 'description': 'При создании книги загрузите PDF: все листы автоматически станут страницами. Без текстового слоя листы сохраняются картинками.'}),
-                 ('Публикация и доступ', {'fields': ('status', 'visibility')})]
+                 ('Публикация и доступ', {'fields': ('status', 'visibility', 'viewing_link'), 'description': 'Ссылка даёт просмотр этой книги без регистрации при любом статусе и доступе. Её использует QR в PDF. Для отзыва выберите действие создания новых ссылок в списке книг.'})]
 
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)

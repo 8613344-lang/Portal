@@ -182,7 +182,7 @@ def book_pdf(book, pages):
         else:
             background(leaf_number)
             if end_picture: full_picture(end_picture, preserve=True)
-        url = settings.SITE_URL.rstrip('/')+'/'
+        url = book.share_url
         ink = colors.HexColor(book.ending_text_color)
         if end_picture and (book.ending_show_text or book.ending_show_qr):
             canvas.saveState()

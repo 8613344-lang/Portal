@@ -46,7 +46,7 @@ def project_qr(book=None):
     from reportlab.graphics.shapes import Drawing
     from reportlab.graphics.barcode.qr import QrCodeWidget
     from reportlab.lib.colors import HexColor
-    qr = QrCodeWidget(settings.SITE_URL.rstrip('/')+'/', barFillColor=HexColor(book.ending_qr_color if book else '#000000'))
+    qr = QrCodeWidget(book.share_url if book else settings.SITE_URL.rstrip('/')+'/', barFillColor=HexColor(book.ending_qr_color if book else '#000000'))
     bounds = qr.getBounds()
     size = 160
     drawing = Drawing(size,size,transform=[size/(bounds[2]-bounds[0]),0,0,size/(bounds[3]-bounds[1]),0,0])

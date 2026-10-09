@@ -7,6 +7,7 @@ urlpatterns = [
     path('health/', views.health, name='health'),
     path('', views.home, name='home'),
     path('books/', views.catalog, name='catalog'),
+    path('read/<uuid:token>/', views.shared_reader, name='shared-reader'),
     path('books/<slug:slug>/', views.reader, name='reader'),
     path('books/<slug:slug>/download/<str:format>/', views.export_book, name='book-export'),
     path('pages/<int:pk>/audio/', views.page_audio, name='page-audio'),

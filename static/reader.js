@@ -212,4 +212,5 @@ if (reader && document.querySelector('#page-only')) {
     }
   });
   window.addEventListener('pagehide', () => stop());
+  if (reader.dataset.autostart === 'true') setFocus(true);
 }

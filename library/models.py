@@ -23,6 +23,7 @@ class BookQuerySet(models.QuerySet):
 class Book(models.Model):
     title = models.CharField('Название', max_length=200)
     slug = models.SlugField('Адрес', max_length=120, unique=True)
+    share_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     description = models.TextField('Описание', blank=True)
     child_name = models.CharField('Имя героя', max_length=100, blank=True)
     age_label = models.CharField('Возраст читателей', max_length=60, default='Для детей от 2 до 5 лет')
@@ -54,6 +55,10 @@ class Book(models.Model):
         verbose_name = 'Книга'
         verbose_name_plural = 'Книги'
     def __str__(self): return self.title
+    @property
+    def share_url(self):
+        from django.urls import reverse
+        return settings.SITE_URL.rstrip('/') + reverse('shared-reader', args=[self.share_token])
     @property
     def ending_panel_css(self):
         value = self.ending_panel_color.lstrip('#')

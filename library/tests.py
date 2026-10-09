@@ -51,6 +51,61 @@ class PlatformTests(TestCase):
         BookPage.objects.create(book=self.public, position=1, title='Открытая страница', text='Добрая история')
         BookAccess.objects.create(book=self.private, user=self.a)
 
+    def test_shared_links_open_all_access_modes_and_autostart(self):
+        for book in (self.public, self.private, self.draft):
+            client = Client()
+            url = reverse('shared-reader', args=[book.share_token])
+            response = client.get(url)
+            self.assertEqual(response.status_code, 200)
+            self.assertContains(response, 'data-autostart="true"')
+            self.assertEqual(response.context['current'].kind, 'cover')
+            self.assertEqual(response['Referrer-Policy'], 'same-origin')
+            self.assertIn('no-store', response['Cache-Control'])
+        self.private.status = 'archived'
+        self.private.save()
+        self.assertEqual(Client().get(reverse('shared-reader', args=[self.private.share_token])).status_code, 200)
+
+    def test_shared_link_unlocks_only_its_media_and_exports(self):
+        self.assertEqual(self.client.get(self.page.audio.url).status_code, 404)
+        self.client.get(reverse('shared-reader', args=[self.private.share_token]))
+        response = self.client.get(self.page.audio.url, HTTP_RANGE='bytes=0-9')
+        self.assertEqual(response.status_code, 206)
+        self.assertEqual(len(b''.join(response.streaming_content)), 10)
+        response.close()
+        self.assertEqual(self.client.get(reverse('reader', args=[self.private.slug])+'?page=2').status_code, 200)
+        self.assertEqual(self.client.get(reverse('reader', args=[self.draft.slug])).status_code, 404)
+        response = self.client.get(reverse('book-export', args=[self.private.slug, 'pdf']))
+        self.assertEqual(response.status_code, 200)
+        response.close()
+        self.assertNotContains(self.client.get(reverse('catalog')), self.private.title)
+        self.assertEqual(Client().get(self.page.audio.url).status_code, 404)
+
+    def test_rotating_share_token_revokes_old_link_and_session(self):
+        old = reverse('shared-reader', args=[self.private.share_token])
+        self.client.get(old)
+        self.private.share_token = uuid.uuid4()
+        self.private.save(update_fields=['share_token'])
+        self.assertEqual(self.client.get(old).status_code, 404)
+        self.assertEqual(self.client.get(reverse('reader', args=[self.private.slug])).status_code, 404)
+        self.assertEqual(self.client.get(self.page.audio.url).status_code, 404)
+        self.assertEqual(self.client.get(reverse('book-export', args=[self.private.slug, 'pdf'])).status_code, 404)
+        self.assertEqual(self.client.get(reverse('shared-reader', args=[self.private.share_token])).status_code, 200)
+        self.assertEqual(self.client.get(reverse('shared-reader', args=[uuid.uuid4()])).status_code, 404)
+
+    def test_pdf_and_reader_qr_use_this_books_share_url(self):
+        from .exports import book_pdf
+        from .sheets import project_qr
+        from pypdf import PdfReader
+        from reportlab.graphics.barcode.qr import QrCodeWidget
+        with patch('reportlab.graphics.barcode.qr.QrCodeWidget', wraps=QrCodeWidget) as qr:
+            project_qr(self.private)
+            self.assertEqual(qr.call_args.args[0], self.private.share_url)
+        with book_pdf(self.private, [self.page]) as output:
+            page = PdfReader(output).pages[-1]
+            self.assertEqual(str(page['/Annots'][0].get_object()['/A']['/URI']), self.private.share_url)
+        self.client.get(reverse('shared-reader', args=[self.private.share_token]))
+        self.assertContains(self.client.get(reverse('reader', args=[self.private.slug])+'?page=3'), self.private.share_url)
+
     def test_exports_deny_private_and_draft_without_access(self):
         for format in ('pdf', 'mp3'):
             for book in (self.private, self.draft):

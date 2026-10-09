@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% block title %}{{ book.title }} · Книги рядом{% endblock %}
 {% block content %}
-<section class="reader-shell" data-book-reader data-number="{{ number }}" data-total="{{ total }}" data-focus-previous="{{ spread.previous }}" data-focus-next="{{ spread.next }}" data-focus-label="{{ spread.label }}">
+<section class="reader-shell" data-book-reader data-autostart="{{ shared|yesno:'true,false' }}" data-number="{{ number }}" data-total="{{ total }}" data-focus-previous="{{ spread.previous }}" data-focus-next="{{ spread.next }}" data-focus-label="{{ spread.label }}">
   <div class="reader-top">
     <a class="text-link" href="{% if user.is_authenticated %}{% url 'account' %}{% else %}{% url 'catalog' %}{% endif %}">← К книгам</a>
     <span>{{ book.title }}</span><button class="text-link print-button" type="button">Печать страницы</button>
@@ -37,14 +37,14 @@
           {% if current.illustration %}<img class="page-illustration" src="{{ current.illustration.url }}" alt="{{ current.title }}">{% endif %}
           {% if current.kind == 'ending' %}{% if book.ending_show_text or book.ending_show_qr %}<div class="sheet-overlay">
             {% if book.ending_show_text %}<div class="ending-copy"><h2>{{ book.ending_title }}</h2><div>{{ book.ending_text|linebreaks }}</div></div>{% endif %}
-            {% if book.ending_show_qr %}<a class="project-qr" href="{% url 'home' %}" aria-label="Сайт проекта">{{ project_qr|safe }}</a>{% endif %}
+            {% if book.ending_show_qr %}<a class="project-qr" href="{{ book.share_url }}" aria-label="Открыть эту книгу">{{ project_qr|safe }}</a>{% endif %}
           </div>{% endif %}{% endif %}
         {% else %}
           <p class="eyebrow">{% if current.kind == 'cover' %}ОБЛОЖКА{% elif current.kind == 'ending' %}ПОСЛЕДНЯЯ СТРАНИЦА{% else %}СТРАНИЦА {{ number }} / {{ total }}{% endif %}</p>
           {% if current.kind != 'ending' or book.ending_show_text %}<h1>{{ current.display_title|default:current.title }}</h1>{% endif %}
           {% if current.illustration %}<img class="page-illustration" src="{{ current.illustration.url }}" alt="{{ current.title }}">{% endif %}
           {% if current.kind != 'ending' or book.ending_show_text %}<div class="story-text">{{ current.text|linebreaks }}</div>{% endif %}
-          {% if current.kind == 'ending' and book.ending_show_qr %}<a class="project-qr" href="{% url 'home' %}" aria-label="Сайт проекта">{{ project_qr|safe }}</a>{% endif %}
+          {% if current.kind == 'ending' and book.ending_show_qr %}<a class="project-qr" href="{{ book.share_url }}" aria-label="Открыть эту книгу">{{ project_qr|safe }}</a>{% endif %}
         {% endif %}
       </article>
       {% if spread.split_story or spread.pages|length > 1 %}

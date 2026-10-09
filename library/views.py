@@ -44,8 +44,25 @@ def register(request):
     return render(request, 'registration/register.html', {'form': form})
 
 @never_cache
-def reader(request, slug):
-    book = get_object_or_404(Book.objects.visible_to(request.user), slug=slug)
+@require_http_methods(['GET'])
+def shared_reader(request, token):
+    book = get_object_or_404(Book, share_token=token)
+    grants = request.session.get('shared_books', {})
+    grants.pop(str(book.pk), None)
+    grants[str(book.pk)] = str(book.share_token)
+    request.session['shared_books'] = dict(list(grants.items())[-100:])
+    response = reader(request, book.slug, shared=True)
+    response['Referrer-Policy'] = 'same-origin'
+    return response
+
+def can_read_book(request, book):
+    token = request.session.get('shared_books', {}).get(str(book.pk))
+    return token == str(book.share_token) or Book.objects.visible_to(request.user).filter(pk=book.pk).exists()
+
+@never_cache
+def reader(request, slug, shared=False):
+    book = get_object_or_404(Book, slug=slug)
+    if not can_read_book(request, book): raise Http404
     pages = book_sheets(book, list(book.pages.all()))
     try: number = int(request.GET.get('page', '1'))
     except ValueError: number = 1
@@ -54,13 +71,14 @@ def reader(request, slug):
     permission = 'library.change_bookpage' if current.kind == 'story' else 'library.change_book'
     can_edit = request.user.is_authenticated and request.user.is_staff and request.user.has_perm(permission)
     audio_action = reverse('page-audio', args=[current.pk]) if current.kind == 'story' else reverse('sheet-audio', args=[book.slug, current.kind])
-    return render(request, 'library/reader.html', {'book': book, 'pages': pages, 'current': current, 'spread': reader_spread(book, pages, number), 'number': number, 'total': len(pages), 'previous': number - 1, 'next': number + 1, 'can_edit': can_edit, 'audio_form': PageAudioForm(), 'audio_action':audio_action, 'project_qr':project_qr(book) if current.kind == 'ending' and book.ending_show_qr else '', 'audio_count': sum(bool(p.audio) for p in pages)})
+    return render(request, 'library/reader.html', {'book': book, 'shared': shared, 'pages': pages, 'current': current, 'spread': reader_spread(book, pages, number), 'number': number, 'total': len(pages), 'previous': number - 1, 'next': number + 1, 'can_edit': can_edit, 'audio_form': PageAudioForm(), 'audio_action':audio_action, 'project_qr':project_qr(book) if current.kind == 'ending' and book.ending_show_qr else '', 'audio_count': sum(bool(p.audio) for p in pages)})
 
 @never_cache
 @require_http_methods(['GET'])
 def export_book(request, slug, format):
     from .exports import ExportError, book_pdf, book_mp3, export_slots
-    book = get_object_or_404(Book.objects.visible_to(request.user), slug=slug)
+    book = get_object_or_404(Book, slug=slug)
+    if not can_read_book(request, book): raise Http404
     if format not in ('pdf', 'mp3'): raise Http404
     if not export_slots.acquire(blocking=False):
         response = HttpResponse('Выгрузки заняты. Повторите попытку через несколько секунд.', status=503, content_type='text/plain; charset=utf-8')
@@ -199,7 +217,7 @@ def private_file(request, path):
     elif book:
         file_field = next(getattr(book, name) for name in ('cover','background_image','cover_audio','ending_image','ending_audio') if getattr(book,name).name == path)
     if book:
-        if not Book.objects.visible_to(request.user).filter(pk=book.pk).exists(): raise Http404
+        if not can_read_book(request, book): raise Http404
     else:
         order = Order.objects.filter(photo=path).first()
         if not order or not request.user.is_authenticated or not request.user.is_staff or not request.user.has_perm('library.view_order'):
