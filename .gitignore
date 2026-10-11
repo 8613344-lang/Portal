@@ -12,3 +12,9 @@ backups/
 *.pem
 *.key
 test-results/
+android/.gradle/
+android/local.properties
+android/**/build/
+android/*.jks
+android/*.keystore
+android/.avd/

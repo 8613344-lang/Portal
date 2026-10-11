@@ -1,0 +1,8 @@
+{% extends 'app_base.html' %}
+{% block content %}<div class="app-library">
+<section class="app-section"><h1>Персональные книги</h1>
+{% if not user.is_authenticated %}<p class="muted">Войдите, чтобы увидеть книги, созданные для вас.</p>{% endif %}
+{% include 'library/app_book_grid.html' with books=personal_books page_key='mine' empty_message='Персональных книг пока нет.' %}
+</section>
+<section class="app-section"><h2>Публичные книги</h2>{% include 'library/app_book_grid.html' with books=public_books page_key='public' empty_message='Публичных книг пока нет.' %}</section>
+</div>{% endblock %}

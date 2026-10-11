@@ -2,8 +2,12 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import path
 from library import views
+from library import app_views
 
 urlpatterns = [
+    path('app/', app_views.shelf, name='app-shelf'),
+    path('app/login/', app_views.AppLoginView.as_view(), name='app-login'),
+    path('app/logout/', app_views.app_logout, name='app-logout'),
     path('health/', views.health, name='health'),
     path('', views.home, name='home'),
     path('books/', views.catalog, name='catalog'),

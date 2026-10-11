@@ -110,6 +110,53 @@ class PlatformTests(TestCase):
         for format in ('pdf', 'mp3'):
             for book in (self.private, self.draft):
                 self.assertEqual(self.client.get(reverse('book-export', args=[book.slug, format])).status_code, 404)
+
+    def test_android_shelf_only_published_books_and_personal_first(self):
+        url = reverse('app-shelf')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, self.public.title)
+        self.assertNotContains(response, self.private.title)
+        self.assertNotContains(response, self.draft.title)
+        self.assertNotContains(response, 'Заказать книгу')
+        self.client.force_login(self.a)
+        response = self.client.get(url)
+        html = response.content.decode()
+        self.assertLess(html.index('<h3>'+self.private.title), html.index('<h3>'+self.public.title))
+        self.assertEqual(response.context['personal_books'].paginator.count, 1)
+        self.assertNotContains(response, self.draft.title)
+        self.client.force_login(self.b)
+        self.assertNotContains(self.client.get(url), self.private.title)
+
+    def test_android_shelf_deduplicates_and_paginates_phone_and_tablet(self):
+        BookAccess.objects.create(book=self.public, user=self.a)
+        Book.objects.bulk_create([Book(title=f'Книга {i}',slug=f'app-{i}',status='published',visibility='public') for i in range(30)])
+        self.client.force_login(self.a)
+        for device, count in [('phone',12),('tablet',24)]:
+            response = self.client.get(reverse('app-shelf')+f'?device={device}')
+            self.assertEqual(len(response.context['public_books']), count)
+            self.assertEqual(response.context['personal_books'].paginator.count, 2)
+            self.assertEqual(response.context['public_books'].paginator.count, 30)
+            self.assertContains(response, f'device-{device}')
+            self.assertContains(response, 'Далее →')
+
+    def test_android_reader_autostarts_without_granting_access(self):
+        url = reverse('reader',args=[self.private.slug])+'?app=1&device=tablet'
+        self.assertEqual(self.client.get(url).status_code,404)
+        self.client.force_login(self.a)
+        response = self.client.get(url)
+        self.assertContains(response,'data-autostart="true"')
+        self.assertContains(response,'data-app="true"')
+        self.assertContains(response,'device-tablet')
+        self.assertNotContains(response,'Заказать книгу')
+        self.assertNotContains(response,'class="site-header"')
+
+    def test_android_login_stays_in_books_and_logout_is_post_only(self):
+        response = self.client.post(reverse('app-login')+'?device=tablet&next=/admin/',{'username':self.a.username,'password':'LongPassword-test-738'})
+        self.assertRedirects(response,reverse('app-shelf')+'?device=tablet')
+        self.assertEqual(self.client.get(reverse('app-logout')).status_code,405)
+        self.client.post(reverse('app-logout'))
+        self.assertNotContains(self.client.get(reverse('app-shelf')),self.private.title)
         self.client.force_login(self.b)
         self.assertEqual(self.client.get(reverse('book-export', args=[self.private.slug, 'pdf'])).status_code, 404)
 

@@ -187,7 +187,11 @@ if (reader && document.querySelector('#page-only')) {
     void turnPage(number);
   }
   pageOnly.addEventListener('click', () => setFocus(!focusMode));
-  document.querySelector('#focus-exit').addEventListener('click', () => setFocus(false));
+  const exitReader = () => {
+    if (reader.dataset.app === 'true') location.assign('/app/?device=' + encodeURIComponent(reader.dataset.device));
+    else setFocus(false);
+  };
+  document.querySelector('#focus-exit').addEventListener('click', exitReader);
   toggle.addEventListener('click', () => { if (running) stop(); else void start(); showControls(); });
   previous.addEventListener('click', () => manual(Number(reader.dataset.focusPrevious)));
   next.addEventListener('click', () => manual(Number(reader.dataset.focusNext)));
@@ -196,7 +200,7 @@ if (reader && document.querySelector('#page-only')) {
   window.addEventListener('resize', fitPage);
   document.addEventListener('keydown', event => {
     if (!focusMode || event.target.closest('input,textarea,select')) return;
-    if (event.key === 'Escape') { event.preventDefault(); setFocus(false); }
+    if (event.key === 'Escape') { event.preventDefault(); exitReader(); }
     if (event.key === 'ArrowLeft') { event.preventDefault(); manual(Number(reader.dataset.focusPrevious)); }
     if (event.key === 'ArrowRight') { event.preventDefault(); manual(Number(reader.dataset.focusNext)); }
     if (event.code === 'Space' && !event.target.closest('button,a')) { event.preventDefault(); toggle.click(); }
