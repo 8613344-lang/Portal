@@ -1,0 +1,1 @@
+{% extends 'base.html' %}{% block content %}<section class="auth-card"><h1>Подтверждение почты</h1><p>Если вы закрыли страницу регистрации, укажите email и запросите новый код.</p><form method="post">{% csrf_token %}{{ form.as_p }}<button class="button primary">Продолжить</button></form><a href="{% url 'login' %}">Войти</a></section>{% endblock %}

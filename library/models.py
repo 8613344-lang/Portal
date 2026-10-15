@@ -184,3 +184,12 @@ class BotState(models.Model):
 class RateEvent(models.Model):
     key = models.CharField(max_length=64, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+
+class EmailConfirmation(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='email_confirmation')
+    code_hash = models.CharField(max_length=64, blank=True)
+    expires_at = models.DateTimeField(null=True)
+    sent_at = models.DateTimeField(null=True)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    verified_at = models.DateTimeField(null=True)

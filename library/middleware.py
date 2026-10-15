@@ -9,7 +9,7 @@ from .models import RateEvent
 class RateLimitMiddleware:
     def __init__(self, get_response): self.get_response = get_response
     def __call__(self, request):
-        limits = {'/order/': 10, '/accounts/login/': 20, '/app/login/': 20, '/admin/login/': 20, '/accounts/register/': 10}
+        limits = {'/accounts/confirm/start/':5, '/accounts/confirm/':20, '/accounts/confirm/resend/':5, '/accounts/password-reset/':5, '/order/': 10, '/accounts/login/': 20, '/app/login/': 20, '/admin/login/': 20, '/accounts/register/': 10}
         if settings.RATE_LIMIT_ENABLED and request.method == 'POST' and request.path in limits:
             # Nginx overwrites this header. Production app is not exposed directly.
             ip = request.META.get('HTTP_X_REAL_IP') if settings.BEHIND_PROXY else request.META.get('REMOTE_ADDR')

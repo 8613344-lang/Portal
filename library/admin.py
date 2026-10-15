@@ -2,12 +2,34 @@ from django.contrib import admin
 from django.utils import timezone
 from django.utils.html import format_html
 import uuid
+from django import forms as django_forms
+from django.contrib.auth.models import User
+from django.contrib.auth.admin import UserAdmin
+from django.contrib.auth.forms import UserChangeForm
 from .models import Book, BookPage, BookAccess, Order, NotificationRecipient, Notification
 from .forms import BookAdminForm
 
 admin.site.site_header = 'Книги рядом · управление'
 admin.site.site_title = 'Книги рядом'
 admin.site.index_title = 'Книги, заказы и доступы'
+
+
+class EmailUserChangeForm(UserChangeForm):
+    def clean_email(self):
+        value = self.cleaned_data.get('email','').strip().lower()
+        if value and User.objects.filter(email__iexact=value).exclude(pk=self.instance.pk).exists():
+            raise django_forms.ValidationError('Этот email уже используется другим пользователем.')
+        return value
+
+
+admin.site.unregister(User)
+
+
+@admin.register(User)
+class PortalUserAdmin(UserAdmin):
+    form = EmailUserChangeForm
+    list_display = ['email','first_name','username','is_active','is_staff']
+    search_fields = ['email','first_name','username']
 
 class PageInline(admin.StackedInline):
     model = BookPage

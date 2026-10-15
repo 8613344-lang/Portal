@@ -152,7 +152,8 @@ class PlatformTests(TestCase):
         self.assertNotContains(response,'class="site-header"')
 
     def test_android_login_stays_in_books_and_logout_is_post_only(self):
-        response = self.client.post(reverse('app-login')+'?device=tablet&next=/admin/',{'username':self.a.username,'password':'LongPassword-test-738'})
+        self.a.email = 'reader-a@example.com'; self.a.save()
+        response = self.client.post(reverse('app-login')+'?device=tablet&next=/admin/',{'username':self.a.email,'password':'LongPassword-test-738'})
         self.assertRedirects(response,reverse('app-shelf')+'?device=tablet')
         self.assertEqual(self.client.get(reverse('app-logout')).status_code,405)
         self.client.post(reverse('app-logout'))
@@ -624,9 +625,11 @@ class PlatformTests(TestCase):
         self.assertContains(response, 'Секретная книга')
         self.assertNotContains(response, 'Публичная книга')
     def test_registered_user_has_no_automatic_grants(self):
-        data = {'username': 'new-reader', 'email': 'new@example.com', 'password1': 'LongPassword-fresh-829', 'password2': 'LongPassword-fresh-829'}
+        from django.utils.crypto import salted_hmac
+        session = self.client.session; session['captcha'] = [salted_hmac('captcha','ABCDEF').hexdigest(),timezone.now().timestamp()]; session.save()
+        data = {'name': 'new-reader', 'captcha':'ABCDEF', 'consent':'on', 'email': 'new@example.com', 'password1': 'LongPassword-fresh-829', 'password2': 'LongPassword-fresh-829'}
         self.assertEqual(self.client.post(reverse('register'), data).status_code, 302)
-        self.assertEqual(BookAccess.objects.filter(user__username='new-reader').count(), 0)
+        self.assertEqual(BookAccess.objects.filter(user__email='new@example.com').count(), 0)
         self.assertEqual(self.client.get(reverse('reader', args=['private'])).status_code, 404)
     def test_order_without_photo_and_duplicate_submit(self):
         recipient = NotificationRecipient.objects.create(name='Manager', channel='email', destination='staff@example.com')

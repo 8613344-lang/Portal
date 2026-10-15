@@ -1,5 +1,4 @@
 from django import forms
-from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
 from .models import Order, Book
 
@@ -26,11 +25,26 @@ class BookAdminForm(forms.ModelForm):
         try: return prepare_pdf(file)
         except PDFImportError as error: raise forms.ValidationError(str(error)) from error
 
-class RegistrationForm(UserCreationForm):
-    email = forms.EmailField(label='Email')
-    class Meta(UserCreationForm.Meta):
-        model = User
-        fields = ['username', 'email', 'password1', 'password2']
+class RegistrationForm(forms.Form):
+    name = forms.CharField(label='Имя', max_length=150)
+    email = forms.EmailField(label='Email', max_length=254)
+    password1 = forms.CharField(label='Пароль', strip=False, widget=forms.PasswordInput)
+    password2 = forms.CharField(label='Повторите пароль', strip=False, widget=forms.PasswordInput)
+    captcha = forms.CharField(label='Код с картинки', max_length=6)
+    consent = forms.BooleanField(label='Согласен на обработку персональных данных')
+    def clean_email(self):
+        value = self.cleaned_data['email'].strip().lower()
+        if User.objects.filter(email__iexact=value).exists():
+            raise forms.ValidationError('Этот email уже используется. Войдите или восстановите пароль.')
+        return value
+    def clean(self):
+        from django.contrib.auth.password_validation import validate_password
+        data = super().clean()
+        if data.get('password1') != data.get('password2'):
+            self.add_error('password2','Пароли не совпадают.')
+        elif data.get('password1'):
+            validate_password(data['password1'], User(first_name=data.get('name',''),email=data.get('email','')))
+        return data
 
 class OrderForm(forms.ModelForm):
     consent = forms.BooleanField(label='Я согласен(на) на обработку данных для выполнения заказа')

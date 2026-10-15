@@ -2,9 +2,19 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import path
 from library import views
-from library import app_views
+from library import app_views, account_views
+from library.authentication import EmailAuthenticationForm
 
 urlpatterns = [
+    path('accounts/confirm/start/', account_views.confirmation_start, name='email-start'),
+    path('accounts/captcha/', account_views.captcha, name='captcha'),
+    path('accounts/confirm/', account_views.confirm, name='email-confirm'),
+    path('accounts/confirm/resend/', account_views.resend, name='email-resend'),
+    path('profile/', account_views.profile, name='profile'),
+    path('accounts/password-reset/', account_views.SafePasswordResetView.as_view(), name='password_reset'),
+    path('accounts/password-reset/done/', auth_views.PasswordResetDoneView.as_view(), name='password_reset_done'),
+    path('accounts/reset/<uidb64>/<token>/', auth_views.PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
+    path('accounts/reset/done/', auth_views.PasswordResetCompleteView.as_view(), name='password_reset_complete'),
     path('app/', app_views.shelf, name='app-shelf'),
     path('app/login/', app_views.AppLoginView.as_view(), name='app-login'),
     path('app/logout/', app_views.app_logout, name='app-logout'),
@@ -20,8 +30,8 @@ urlpatterns = [
     path('order/', views.order_create, name='order'),
     path('order/success/', views.order_success, name='order-success'),
     path('privacy/', views.privacy, name='privacy'),
-    path('accounts/register/', views.register, name='register'),
-    path('accounts/login/', auth_views.LoginView.as_view(), name='login'),
+    path('accounts/register/', account_views.register, name='register'),
+    path('accounts/login/', auth_views.LoginView.as_view(authentication_form=EmailAuthenticationForm), name='login'),
     path('accounts/logout/', auth_views.LogoutView.as_view(), name='logout'),
     path('accounts/password-change/', auth_views.PasswordChangeView.as_view(template_name='registration/password_change.html', success_url='/account/'), name='password_change'),
     path('media-private/<path:path>', views.private_file, name='private-file'),

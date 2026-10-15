@@ -16,10 +16,10 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.EditText;
+import android.content.Intent;
 import android.widget.FrameLayout;
 import android.widget.ProgressBar;
-import android.text.InputType;
+
 
 /** Single-purpose client. Credentials stay in the platform's first-party session. */
 public class MainActivity extends Activity {
@@ -30,7 +30,7 @@ public class MainActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
-        origin = getPreferences(MODE_PRIVATE).getString("server", "");
+        origin = "https://qicko.ru";
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.rgb(250,247,240));
         web = new WebView(this);
@@ -68,6 +68,9 @@ public class MainActivity extends Activity {
                 Uri uri = request.getUrl();
                 if (!sameServer(uri)) return true;
                 String path = uri.getPath();
+                if (path != null && (path.startsWith("/accounts/password-reset/") || path.startsWith("/accounts/register/"))) {
+                    startActivity(new Intent(Intent.ACTION_VIEW, uri)); return true;
+                }
                 boolean book = path != null && (path.startsWith("/books/") || path.startsWith("/read/"));
                 boolean allowed = "/app/".equals(path) || "/app/login/".equals(path) || "/app/logout/".equals(path) || book;
                 if (!allowed || (path != null && path.contains("/download/"))) return true;
@@ -82,8 +85,7 @@ public class MainActivity extends Activity {
             }
             @Override public void onPageFinished(WebView view, String url) { CookieManager.getInstance().flush(); }
         });
-        if (origin.isEmpty()) configureServer();
-        else if (state == null || web.restoreState(state) == null) openShelf();
+        if (state == null || !origin.equals(state.getString("portal_origin")) || web.restoreState(state) == null) openShelf();
     }
 
     private String device() { return getResources().getConfiguration().smallestScreenWidthDp >= 600 ? "tablet" : "phone"; }
@@ -107,41 +109,13 @@ public class MainActivity extends Activity {
 
     private void openShelf() { web.loadUrl(origin + "/app/?device=" + device()); }
 
-    private void configureServer() {
-        EditText field = new EditText(this);
-        field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
-        field.setSingleLine(true);
-        field.setHint("https://books.example.ru");
-        field.setText(origin);
-        AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Адрес платформы книг")
-            .setMessage("Введите адрес вашего сервера. Он сохранится для следующих запусков.")
-            .setView(field).setPositiveButton("Открыть", null).setNegativeButton("Закрыть", (d,w) -> finish()).create();
-        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-            Uri uri = Uri.parse(field.getText().toString().trim());
-            boolean validScheme = "https".equals(uri.getScheme()) || (BuildConfig.DEBUG && "http".equals(uri.getScheme()));
-            if (!validScheme || uri.getHost() == null || uri.getUserInfo() != null || uri.getQuery() != null || uri.getFragment() != null || (uri.getPath() != null && !uri.getPath().isEmpty() && !"/".equals(uri.getPath()))) {
-                field.setError("Укажите адрес сервера HTTPS без пути и пароля"); return;
-            }
-            boolean changed = !origin.equals(uri.buildUpon().path(null).build().toString());
-            if (changed) {
-                web.clearHistory(); web.clearCache(true);
-            }
-            origin = uri.buildUpon().path(null).build().toString();
-            getPreferences(MODE_PRIVATE).edit().putString("server", origin).apply();
-            dialog.dismiss();
-            if (changed) CookieManager.getInstance().removeAllCookies(value -> { CookieManager.getInstance().flush(); if (!isFinishing()) openShelf(); });
-            else openShelf();
-        }));
-        dialog.show();
-    }
-
     private void showConnectionError() {
         if (connectionErrorShown || isFinishing()) return;
         connectionErrorShown = true;
         AlertDialog dialog = new AlertDialog.Builder(this).setTitle("Не удалось открыть книги")
             .setMessage("Проверьте интернет и доступность сервера.")
             .setPositiveButton("Повторить", (d,w) -> openShelf())
-            .setNeutralButton("Адрес сервера", (d,w) -> configureServer())
+
             .setNegativeButton("Закрыть", (d,w) -> finish()).create();
         dialog.setOnDismissListener(d -> connectionErrorShown = false);
         dialog.show();
@@ -157,7 +131,7 @@ public class MainActivity extends Activity {
         if (url != null && (url.contains("/books/") || url.contains("/read/") || url.contains("/app/login/"))) openShelf();
         else super.onBackPressed();
     }
-    @Override protected void onSaveInstanceState(Bundle state) { web.saveState(state); super.onSaveInstanceState(state); }
+    @Override protected void onSaveInstanceState(Bundle state) { state.putString("portal_origin", origin); web.saveState(state); super.onSaveInstanceState(state); }
     @Override protected void onPause() { web.evaluateJavascript("window.dispatchEvent(new Event('pagehide'));document.querySelectorAll('audio').forEach(a=>a.pause());", null); web.onPause(); super.onPause(); }
     @Override protected void onResume() { super.onResume(); if (web != null) web.onResume(); }
     @Override protected void onDestroy() { web.destroy(); super.onDestroy(); }

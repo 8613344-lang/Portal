@@ -10,6 +10,7 @@ from django.urls import reverse
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
 from .models import Book, BookPage
+from .authentication import EmailAuthenticationForm
 
 
 def device_mode(request):
@@ -36,6 +37,7 @@ def shelf(request):
 
 
 class AppLoginView(LoginView):
+    authentication_form = EmailAuthenticationForm
     template_name = 'registration/app_login.html'
     redirect_authenticated_user = True
 

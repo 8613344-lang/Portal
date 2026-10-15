@@ -1,0 +1,1 @@
+{% extends 'base.html' %}{% block content %}<section class="auth-card"><h1>Профиль</h1><p>Email: {{ user.email }}</p><form method="post">{% csrf_token %}{{ form.as_p }}<button class="button primary">Сохранить</button></form><p><a href="{% url 'password_change' %}">Сменить пароль</a></p><p><a href="{% url 'account' %}">Мои книги</a></p></section>{% endblock %}

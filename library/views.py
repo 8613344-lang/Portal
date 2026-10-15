@@ -1,7 +1,6 @@
 import re
 import uuid
 from django.contrib import messages
-from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db import transaction
@@ -10,7 +9,7 @@ from django.http import FileResponse, Http404, HttpResponse, StreamingHttpRespon
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods, require_POST
-from .forms import OrderForm, PageAudioForm, RegistrationForm
+from .forms import OrderForm, PageAudioForm
 from .models import Book, BookPage, Notification, NotificationRecipient, Order
 from .sheets import book_sheets, project_qr, reader_spread
 from django.urls import reverse
@@ -31,17 +30,6 @@ def catalog(request):
 def account(request):
     books = Book.objects.filter(grants__user=request.user, status='published').distinct()
     return render(request, 'library/account.html', {'page_obj': Paginator(books, 18).get_page(request.GET.get('page')), 'orders': Order.objects.filter(user=request.user)[:50]})
-
-@never_cache
-@require_http_methods(['GET', 'POST'])
-def register(request):
-    if request.user.is_authenticated: return redirect('account')
-    form = RegistrationForm(request.POST or None)
-    if request.method == 'POST' and form.is_valid():
-        user = form.save()
-        login(request, user)
-        return redirect('account')
-    return render(request, 'registration/register.html', {'form': form})
 
 @never_cache
 @require_http_methods(['GET'])
