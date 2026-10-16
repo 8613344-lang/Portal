@@ -6,6 +6,7 @@ from django.db.models import Q
 from django.utils import timezone
 from django.core.validators import MinValueValidator, MaxValueValidator, RegexValidator
 from .validators import normalize_image, validate_audio
+from .legal import DEFAULT_AGREEMENT_CONTENT, DEFAULT_AGREEMENT_TITLE
 
 def private_path(instance, filename):
     suffix = Path(filename).suffix.lower()
@@ -193,3 +194,25 @@ class EmailConfirmation(models.Model):
     sent_at = models.DateTimeField(null=True)
     attempts = models.PositiveSmallIntegerField(default=0)
     verified_at = models.DateTimeField(null=True)
+
+
+class UserAgreement(models.Model):
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    title = models.CharField('Заголовок', max_length=200, default=DEFAULT_AGREEMENT_TITLE)
+    content = models.TextField(
+        'Текст соглашения', default=DEFAULT_AGREEMENT_CONTENT,
+        help_text='Абзацы разделяйте пустой строкой. HTML-код не поддерживается.',
+    )
+    updated_at = models.DateTimeField('Последнее изменение', auto_now=True)
+
+    class Meta:
+        verbose_name = 'Пользовательское соглашение'
+        verbose_name_plural = 'Пользовательское соглашение'
+        constraints = [models.CheckConstraint(condition=Q(id=1), name='single_user_agreement')]
+
+    def __str__(self):
+        return self.title
+
+    def get_absolute_url(self):
+        from django.urls import reverse
+        return reverse('privacy')

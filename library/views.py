@@ -11,6 +11,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods, require_POST
 from .forms import OrderForm, PageAudioForm
 from .models import Book, BookPage, Notification, NotificationRecipient, Order
+from .models import UserAgreement
 from .sheets import book_sheets, project_qr, reader_spread
 from django.urls import reverse
 
@@ -184,7 +185,9 @@ def order_success(request):
     if not order_id: return redirect('order')
     return render(request, 'library/order_success.html', {'order_id': order_id})
 
-def privacy(request): return render(request, 'library/privacy.html')
+def privacy(request):
+    agreement = UserAgreement.objects.filter(pk=1).first() or UserAgreement()
+    return render(request, 'library/privacy.html', {'agreement': agreement})
 
 def health(request):
     from django.db import connection

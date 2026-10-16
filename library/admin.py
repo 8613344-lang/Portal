@@ -7,11 +7,12 @@ from django.contrib.auth.models import User
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import UserChangeForm
 from .models import Book, BookPage, BookAccess, Order, NotificationRecipient, Notification
+from .models import UserAgreement
 from .forms import BookAdminForm
 
 admin.site.site_header = 'Книги рядом · управление'
 admin.site.site_title = 'Книги рядом'
-admin.site.index_title = 'Книги, заказы и доступы'
+admin.site.index_title = 'Книги, заказы и настройки сайта'
 
 
 class EmailUserChangeForm(UserChangeForm):
@@ -144,3 +145,26 @@ class NotificationAdmin(admin.ModelAdmin):
     def retry_failed(self, request, queryset):
         count = queryset.filter(state='failed').update(state='pending', attempts=0, next_attempt=timezone.now(), last_error='', lease_token=None)
         self.message_user(request, f'Возвращено в очередь: {count}.')
+
+
+@admin.register(UserAgreement)
+class UserAgreementAdmin(admin.ModelAdmin):
+    list_display = ['title', 'updated_at']
+    fields = ['title', 'content', 'public_page', 'updated_at']
+    readonly_fields = ['public_page', 'updated_at']
+    actions = None
+
+    def has_add_permission(self, request):
+        return super().has_add_permission(request) and not UserAgreement.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    @admin.display(description='Страница на сайте')
+    def public_page(self, obj):
+        from django.urls import reverse
+        url = reverse('privacy')
+        return format_html('<a href="{}" target="_blank" rel="noopener">{}</a>', url, url)
+
+    def view_on_site(self, obj):
+        return obj.get_absolute_url()

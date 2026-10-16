@@ -62,6 +62,9 @@ body.website{--cream:#fbf7ee;--ink:#2b3f43;--muted:#626d6d;--mustard:#edc46b;--s
 .website .preview-copy>span{font-size:10px}
 .website .how-grid p{font-size:12px}
 .website .reading-page h1,.website .reading-page h2,.website .reading-page h3,.website .focus-spread h1,.website .focus-spread h2,.website .focus-spread h3{color:inherit}
+.website .legal .page-title{font-size:clamp(30px,4vw,48px);overflow-wrap:anywhere}
+.website .legal .legal-updated{font-size:12px;margin:18px 0 28px;color:var(--muted)}
+.website .legal-body{overflow-wrap:anywhere}
 @keyframes book-drift{0%,100%{transform:translateY(0) rotate(-.4deg)}50%{transform:translateY(-7px) rotate(.4deg)}}
 @keyframes page-turn{0%,40%,100%{transform:rotateY(0);opacity:0}50%{opacity:.4}63%{transform:rotateY(-40deg);opacity:.15}75%{transform:rotateY(-65deg);opacity:0}}
 @keyframes sparkle{0%,100%{opacity:.6;transform:scale(.9)}50%{opacity:1;transform:scale(1.1)}}
