@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="{% static 'style.css' %}">
   <link rel="stylesheet" href="{% static 'site.css' %}">
   <link rel="stylesheet" href="{% static 'library-design.css' %}">
+  <link rel="stylesheet" href="{% static 'audio-preview.css' %}">
   {% block extra_head %}{% endblock %}
   <script src="{% static 'reader.js' %}" defer></script>
   <script src="{% static 'site.js' %}" defer></script>
@@ -22,7 +23,7 @@
   </a>
   <button class="menu-toggle" type="button" aria-controls="main-nav" aria-expanded="false"><span aria-hidden="true">☰</span><span class="sr-only">Открыть меню</span></button>
   <nav id="main-nav" aria-label="Основная навигация">
-    <a href="{% url 'catalog' %}"{% if request.resolver_match.url_name == 'catalog' %} aria-current="page"{% endif %}>Библиотека</a>
+    <a href="{% url 'catalog' %}"{% if request.resolver_match.url_name == 'catalog' %} aria-current="page"{% endif %}>Истории наших читателей</a>
     <a href="{% url 'home' %}#how-it-works">Как это работает</a>
     <a href="{% url 'order' %}"{% if request.resolver_match.url_name == 'order' %} aria-current="page"{% endif %}>Создать книгу</a>
     {% if user.is_authenticated %}
@@ -37,7 +38,7 @@
 <main id="main-content">{% block content %}{% endblock %}</main>
 <footer class="site-footer">
   <div><a class="brand" href="{% url 'home' %}">Книги рядом<span class="brand-dot">.</span></a><p>Маленькие истории о самом важном.</p></div>
-  <div class="footer-links"><a href="{% url 'catalog' %}">Библиотека</a><a href="{% url 'order' %}">Создать книгу</a><a href="{% url 'privacy' %}">Пользовательское соглашение</a></div>
+  <div class="footer-links"><a href="{% url 'catalog' %}">Истории наших читателей</a><a href="{% url 'order' %}">Создать книгу</a><a href="{% url 'privacy' %}">Пользовательское соглашение</a></div>
   <span>С теплом к вашему детству<br>© {% now 'Y' %} Книги рядом</span>
 </footer>
 </body></html>

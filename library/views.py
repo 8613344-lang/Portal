@@ -11,26 +11,27 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods, require_POST
 from .forms import OrderForm, PageAudioForm
 from .models import Book, BookPage, Notification, NotificationRecipient, Order
-from .models import UserAgreement
+from .models import UserAgreement, HomepagePromotion, AudioPreview
 from .sheets import book_sheets, project_qr, reader_spread
 from django.urls import reverse
 
 def home(request):
     public_books = Book.objects.filter(status='published', visibility='public')
-    preview_book = public_books.exclude(cover_audio='').first()
-    preview_audio = preview_book.cover_audio if preview_book else None
-    if not preview_audio:
-        preview_page = BookPage.objects.filter(
-            book__status='published', book__visibility='public',
-        ).exclude(audio='').select_related('book').first()
-        if preview_page:
-            preview_book = preview_page.book
-            preview_audio = preview_page.audio
+    configured = {preview.position: preview for preview in AudioPreview.objects.all()}
+    audio_previews = []
+    for position in range(1, 6):
+        preview = configured.get(position)
+        available = bool(preview and preview.enabled and preview.audio)
+        audio_previews.append({
+            'position': position,
+            'title': preview.title if preview else f'Вариант озвучки {position}',
+            'available': available,
+            'url': preview.get_absolute_url() if available else '',
+        })
     return render(request, 'library/home.html', {
         'examples': public_books[:3],
-        'preview_book': preview_book,
-        'preview_audio_url': preview_audio.url if preview_audio else '',
-        'preview_audio_title': preview_book.title if preview_book else '',
+        'audio_previews': audio_previews,
+        'promotion': HomepagePromotion.objects.filter(pk=1).first() or HomepagePromotion(),
     })
 
 def catalog(request):
@@ -225,10 +226,32 @@ def private_file(request, path):
         if not can_read_book(request, book): raise Http404
     else:
         order = Order.objects.filter(photo=path).first()
-        if not order or not request.user.is_authenticated or not request.user.is_staff or not request.user.has_perm('library.view_order'):
-            raise Http404
-        file_field = order.photo
+        if order:
+            if not request.user.is_authenticated or not request.user.is_staff or not request.user.has_perm('library.view_order'):
+                raise Http404
+            file_field = order.photo
+        else:
+            preview = AudioPreview.objects.filter(audio=path).first()
+            if not preview or not request.user.is_authenticated or not request.user.is_staff or not (
+                request.user.has_perm('library.view_audiopreview') or request.user.has_perm('library.change_audiopreview')
+            ):
+                raise Http404
+            file_field = preview.audio
+    return stream_upload(request, file_field)
+
+
+@never_cache
+@require_http_methods(['GET', 'HEAD'])
+def audio_preview(request, position):
+    preview = get_object_or_404(AudioPreview, position=position, enabled=True)
+    if not preview.audio:
+        raise Http404
+    return stream_upload(request, preview.audio)
+
+
+def stream_upload(request, file_field):
     if not file_field or not file_field.storage.exists(file_field.name): raise Http404
+    path = file_field.name
     mime = 'audio/mpeg' if path.lower().endswith('.mp3') else 'audio/wav' if path.lower().endswith('.wav') else 'image/jpeg'
     size = file_field.size
     range_header = request.headers.get('Range', '')

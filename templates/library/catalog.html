@@ -1,18 +1,18 @@
 {% extends 'base.html' %}
-{% block title %}Библиотека · Книги рядом{% endblock %}
+{% block title %}Истории наших читателей · Книги рядом{% endblock %}
 {% block content %}
 <section class="section page-section library-page">
   <div class="catalog-intro">
     <div class="catalog-intro-copy">
       <p class="eyebrow">МАЛЕНЬКИЕ ЧИТАТЕЛИ. БОЛЬШИЕ МИРЫ.</p>
-      <h1 class="page-title">Библиотека историй<span class="heading-spark" aria-hidden="true">✦</span></h1>
+      <h1 class="page-title">Истории наших читателей<span class="heading-spark" aria-hidden="true">✦</span></h1>
       <p class="catalog-lead">Устройтесь поудобнее — начинается сказка.</p>
       <p class="muted">Открытые книги для знакомства. Ваши персональные истории — в <a href="{% url 'account' %}">личном кабинете</a>.</p>
     </div>
     <div class="catalog-book-decoration" aria-hidden="true"><span></span><span></span><span></span><i>✧</i></div>
   </div>
   <div class="catalog-toolbar">
-    <div><span class="library-tab">Все истории</span><span class="library-count">Книг в библиотеке: {{ page_obj.paginator.count }}</span></div>
+    <div><span class="library-tab">Все истории</span><span class="library-count">Всего историй: {{ page_obj.paginator.count }}</span></div>
     <form class="search" method="get" role="search">
       <label for="q" class="sr-only">Поиск книг</label>
       <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="m16 16 4 4"></path></svg>
@@ -26,7 +26,7 @@
     {% empty %}
       <div class="empty library-empty"><span class="empty-star" aria-hidden="true">✧</span>
         <h2>{% if query %}Эта история ещё не нашлась{% else %}Новая глава уже близко{% endif %}</h2>
-        <p>{% if query %}По этому запросу книг не нашлось. Попробуйте другое название.{% else %}В библиотеке пока нет опубликованных книг. А вашу персональную историю уже можно придумать.{% endif %}</p>
+        <p>{% if query %}По этому запросу книг не нашлось. Попробуйте другое название.{% else %}Здесь пока нет опубликованных историй. А вашу персональную историю уже можно придумать.{% endif %}</p>
         {% if query %}<a class="button secondary" href="{% url 'catalog' %}">Показать все книги</a>{% else %}<a class="button primary" href="{% url 'order' %}">Создать свою книгу <span aria-hidden="true">↗</span></a>{% endif %}
       </div>
     {% endfor %}

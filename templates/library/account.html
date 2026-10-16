@@ -8,7 +8,7 @@
     </div>
     <div class="account-welcome-art" aria-hidden="true"><span class="shelf-cloud"></span><span class="shelf-star">✦</span><span class="shelf-book shelf-book-yellow"></span><span class="shelf-book shelf-book-blue"></span><span class="shelf-book shelf-book-purple"></span><span class="shelf-line"></span></div>
   </div>
-  <div class="shelf-heading"><div><p class="eyebrow">ВАША СЕМЕЙНАЯ ПОЛКА</p><h2>Мои книги <span class="shelf-count">{{ page_obj.paginator.count }}</span></h2></div><a class="text-link" href="{% url 'catalog' %}">Открытая библиотека <span aria-hidden="true">↗</span></a></div>
+  <div class="shelf-heading"><div><p class="eyebrow">ВАША СЕМЕЙНАЯ ПОЛКА</p><h2>Мои книги <span class="shelf-count">{{ page_obj.paginator.count }}</span></h2></div><a class="text-link" href="{% url 'catalog' %}">Истории наших читателей <span aria-hidden="true">↗</span></a></div>
   <p class="muted">Здесь появляются опубликованные книги, к которым вам выдали доступ.</p>
   <div class="book-grid personal-book-grid">
     {% for book in page_obj %}{% include 'library/book_card.html' %}

@@ -7,6 +7,7 @@ from django.utils import timezone
 from django.core.validators import MinValueValidator, MaxValueValidator, RegexValidator
 from .validators import normalize_image, validate_audio
 from .legal import DEFAULT_AGREEMENT_CONTENT, DEFAULT_AGREEMENT_TITLE
+from .homepage import DEFAULT_OFFER_EYEBROW, DEFAULT_OFFER_TITLE, DEFAULT_OFFER_TEXT
 
 def private_path(instance, filename):
     suffix = Path(filename).suffix.lower()
@@ -216,3 +217,51 @@ class UserAgreement(models.Model):
     def get_absolute_url(self):
         from django.urls import reverse
         return reverse('privacy')
+
+
+class HomepagePromotion(models.Model):
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    eyebrow = models.CharField('Надпись над заголовком', max_length=120, default=DEFAULT_OFFER_EYEBROW)
+    title = models.CharField('Заголовок скидки', max_length=200, default=DEFAULT_OFFER_TITLE)
+    text = models.TextField('Текст скидки', max_length=3000, default=DEFAULT_OFFER_TEXT,
+                            help_text='Переносы строк сохраняются. HTML-код не поддерживается.')
+    updated_at = models.DateTimeField('Последнее изменение', auto_now=True)
+
+    class Meta:
+        verbose_name = 'Скидка на главной'
+        verbose_name_plural = 'Скидка на главной'
+        constraints = [models.CheckConstraint(condition=Q(id=1), name='single_homepage_promotion')]
+
+    def __str__(self):
+        return self.title
+
+    def get_absolute_url(self):
+        from django.urls import reverse
+        return reverse('home') + '#offer-title'
+
+
+class AudioPreview(models.Model):
+    position = models.PositiveSmallIntegerField(
+        'Номер варианта', primary_key=True, choices=[(i, str(i)) for i in range(1, 6)],
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+    )
+    title = models.CharField('Название озвучки', max_length=120)
+    audio = models.FileField(
+        'Аудиопример MP3 / WAV', upload_to=private_path, blank=True, validators=[validate_audio],
+        help_text='До 100 МБ. Запись включённого варианта доступна всем посетителям главной страницы.',
+    )
+    enabled = models.BooleanField('Вариант включён', default=True)
+
+    class Meta:
+        ordering = ['position']
+        verbose_name = 'Вариант озвучки'
+        verbose_name_plural = 'Варианты озвучки'
+        constraints = [models.CheckConstraint(condition=Q(position__gte=1, position__lte=5),
+                                              name='audio_preview_position_1_to_5')]
+
+    def __str__(self):
+        return f'{self.position}. {self.title}'
+
+    def get_absolute_url(self):
+        from django.urls import reverse
+        return reverse('audio-preview', args=[self.position])

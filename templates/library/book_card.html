@@ -8,7 +8,7 @@
     <span class="card-open">Открыть книгу <span aria-hidden="true">↗</span></span>
   </a>
   <div class="card-body">
-    <p class="card-kind">{% if book.visibility == 'restricted' %}Ваша персональная история{% else %}Открытая библиотека{% endif %}</p>
+    <p class="card-kind">{% if book.visibility == 'restricted' %}Ваша персональная история{% else %}Истории наших читателей{% endif %}</p>
     <h3><a href="{% url 'reader' book.slug %}">{{ book.title }}</a></h3>
     <p class="card-description">{{ book.description|default:'Маленькая история для большого воображения. Откройте книгу и отправляйтесь в приключение вместе.'|truncatechars:130 }}</p>
     <div class="card-footer"><p class="card-meta">{{ book.age_label }}</p><span aria-hidden="true">↗</span></div>

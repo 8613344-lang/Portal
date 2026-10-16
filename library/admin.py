@@ -7,7 +7,7 @@ from django.contrib.auth.models import User
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import UserChangeForm
 from .models import Book, BookPage, BookAccess, Order, NotificationRecipient, Notification
-from .models import UserAgreement
+from .models import UserAgreement, HomepagePromotion, AudioPreview
 from .forms import BookAdminForm
 
 admin.site.site_header = 'Книги рядом · управление'
@@ -168,3 +168,51 @@ class UserAgreementAdmin(admin.ModelAdmin):
 
     def view_on_site(self, obj):
         return obj.get_absolute_url()
+
+
+@admin.register(HomepagePromotion)
+class HomepagePromotionAdmin(admin.ModelAdmin):
+    list_display = ['title', 'updated_at']
+    fields = ['eyebrow', 'title', 'text', 'updated_at']
+    readonly_fields = ['updated_at']
+    actions = None
+
+    def has_add_permission(self, request):
+        return super().has_add_permission(request) and not HomepagePromotion.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def view_on_site(self, obj):
+        return obj.get_absolute_url()
+
+
+@admin.register(AudioPreview)
+class AudioPreviewAdmin(admin.ModelAdmin):
+    list_display = ['position', 'title', 'enabled', 'has_recording']
+    fields = ['position', 'title', 'audio', 'enabled', 'listening_link']
+    readonly_fields = ['position', 'listening_link']
+    actions = None
+    view_on_site = False
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    @admin.display(boolean=True, description='Запись загружена')
+    def has_recording(self, obj):
+        return bool(obj.audio)
+
+    @admin.display(description='Публичный аудиопример')
+    def listening_link(self, obj):
+        if obj and obj.audio and obj.enabled:
+            return format_html('<a href="{}" target="_blank" rel="noopener">Послушать запись</a>', obj.get_absolute_url())
+        return 'Загрузите запись и включите вариант, чтобы он стал доступен на главной.'
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        field = super().formfield_for_dbfield(db_field, request, **kwargs)
+        if db_field.name == 'audio':
+            field.widget.attrs['accept'] = '.mp3,.wav,audio/mpeg,audio/wav'
+        return field

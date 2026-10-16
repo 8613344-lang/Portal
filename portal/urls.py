@@ -20,6 +20,7 @@ urlpatterns = [
     path('app/logout/', app_views.app_logout, name='app-logout'),
     path('health/', views.health, name='health'),
     path('', views.home, name='home'),
+    path('audio-previews/<int:position>/', views.audio_preview, name='audio-preview'),
     path('books/', views.catalog, name='catalog'),
     path('read/<uuid:token>/', views.shared_reader, name='shared-reader'),
     path('books/<slug:slug>/', views.reader, name='reader'),
