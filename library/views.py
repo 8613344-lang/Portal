@@ -15,8 +15,22 @@ from .sheets import book_sheets, project_qr, reader_spread
 from django.urls import reverse
 
 def home(request):
-    examples = Book.objects.filter(status='published', visibility='public')[:3]
-    return render(request, 'library/home.html', {'examples': examples})
+    public_books = Book.objects.filter(status='published', visibility='public')
+    preview_book = public_books.exclude(cover_audio='').first()
+    preview_audio = preview_book.cover_audio if preview_book else None
+    if not preview_audio:
+        preview_page = BookPage.objects.filter(
+            book__status='published', book__visibility='public',
+        ).exclude(audio='').select_related('book').first()
+        if preview_page:
+            preview_book = preview_page.book
+            preview_audio = preview_page.audio
+    return render(request, 'library/home.html', {
+        'examples': public_books[:3],
+        'preview_book': preview_book,
+        'preview_audio_url': preview_audio.url if preview_audio else '',
+        'preview_audio_title': preview_book.title if preview_book else '',
+    })
 
 def catalog(request):
     query = request.GET.get('q', '').strip()[:100]

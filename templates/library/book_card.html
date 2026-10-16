@@ -1,1 +1,16 @@
-<article class="book-card"><a class="card-cover" href="{% url 'reader' book.slug %}">{% if book.cover %}<img src="{{ book.cover.url }}" alt="Обложка: {{ book.title }}" loading="lazy">{% else %}<div class="cover-placeholder"><span>✦</span><strong>{{ book.title }}</strong><small>КНИГИ РЯДОМ</small></div>{% endif %}<span class="card-open">Читать ↗</span></a><p class="card-meta">{{ book.age_label }}</p><h3><a href="{% url 'reader' book.slug %}">{{ book.title }}</a></h3><p class="card-description">{{ book.description|truncatechars:130 }}</p></article>
+<article class="book-card">
+  <a class="card-cover" href="{% url 'reader' book.slug %}" aria-label="Открыть книгу «{{ book.title }}»">
+    <div class="book-card-visual">
+      {% if book.cover %}<img src="{{ book.cover.url }}" alt="Обложка: {{ book.title }}" loading="lazy">
+      {% elif book.cover_page.illustration %}<img src="{{ book.cover_page.illustration.url }}" alt="Обложка: {{ book.title }}" loading="lazy">
+      {% else %}<div class="cover-placeholder"><span aria-hidden="true">✦</span><strong>{{ book.title }}</strong><small>КНИГИ РЯДОМ</small></div>{% endif %}
+    </div>
+    <span class="card-open">Открыть книгу <span aria-hidden="true">↗</span></span>
+  </a>
+  <div class="card-body">
+    <p class="card-kind">{% if book.visibility == 'restricted' %}Ваша персональная история{% else %}Открытая библиотека{% endif %}</p>
+    <h3><a href="{% url 'reader' book.slug %}">{{ book.title }}</a></h3>
+    <p class="card-description">{{ book.description|default:'Маленькая история для большого воображения. Откройте книгу и отправляйтесь в приключение вместе.'|truncatechars:130 }}</p>
+    <div class="card-footer"><p class="card-meta">{{ book.age_label }}</p><span aria-hidden="true">↗</span></div>
+  </div>
+</article>

@@ -1,1 +1,26 @@
-{% extends 'base.html' %}{% block title %}Мои книги · Книги рядом{% endblock %}{% block content %}<section class="section page-section"><p class="eyebrow">ВАША СЕМЕЙНАЯ ПОЛКА</p><div class="section-heading"><h1 class="page-title">Мои книги</h1><a href="{% url 'password_change' %}" class="text-link">Изменить пароль</a></div><p class="muted">Здесь появляются опубликованные книги, к которым вам выдали доступ.</p><div class="book-grid">{% for book in page_obj %}{% include 'library/book_card.html' %}{% empty %}<div class="empty"><h3>История ещё впереди</h3><p>Когда книга будет готова, мы добавим её на вашу полку.</p><a class="button primary" href="{% url 'order' %}">Заказать книгу ↗</a></div>{% endfor %}</div>{% include 'library/pagination.html' %}<div class="orders-heading"><h2>Мои заказы</h2></div>{% for order in orders %}<div class="order-row"><div><strong>История для {{ order.child_name }}</strong><small>{{ order.created_at|date:'d.m.Y' }} · {{ order.id }}</small></div><span class="status-badge">{{ order.get_status_display }}</span></div>{% empty %}<p class="muted">У вас пока нет заказов. Заказы, отправленные после входа, появятся здесь.</p>{% endfor %}</section>{% endblock %}
+{% extends 'base.html' %}
+{% block title %}Мои книги · Книги рядом{% endblock %}
+{% block content %}
+<section class="section page-section account-page">
+  <div class="account-welcome">
+    <div><p class="eyebrow">ВАШЕ МЕСТО ДЛЯ ТЁПЛЫХ ИСТОРИЙ</p><h1 class="page-title">{% if user.first_name %}С возвращением, {{ user.first_name }}!{% else %}С возвращением!{% endif %}</h1><p>Всё самое любимое — на вашей семейной полке.</p>
+      <div class="account-actions"><a class="button primary" href="{% url 'order' %}">Создать новую книгу <span aria-hidden="true">↗</span></a><a class="text-link" href="{% url 'profile' %}">Настроить профиль</a></div>
+    </div>
+    <div class="account-welcome-art" aria-hidden="true"><span class="shelf-cloud"></span><span class="shelf-star">✦</span><span class="shelf-book shelf-book-yellow"></span><span class="shelf-book shelf-book-blue"></span><span class="shelf-book shelf-book-purple"></span><span class="shelf-line"></span></div>
+  </div>
+  <div class="shelf-heading"><div><p class="eyebrow">ВАША СЕМЕЙНАЯ ПОЛКА</p><h2>Мои книги <span class="shelf-count">{{ page_obj.paginator.count }}</span></h2></div><a class="text-link" href="{% url 'catalog' %}">Открытая библиотека <span aria-hidden="true">↗</span></a></div>
+  <p class="muted">Здесь появляются опубликованные книги, к которым вам выдали доступ.</p>
+  <div class="book-grid personal-book-grid">
+    {% for book in page_obj %}{% include 'library/book_card.html' %}
+    {% empty %}<div class="empty library-empty"><span class="empty-star" aria-hidden="true">✧</span><h3>История ещё впереди</h3><p>Когда книга будет готова, мы добавим её на вашу полку.<br>А пока можно придумать, каким будет первое приключение.</p><a class="button primary" href="{% url 'order' %}">Заказать книгу <span aria-hidden="true">↗</span></a></div>{% endfor %}
+  </div>
+  {% include 'library/pagination.html' %}
+  <section class="account-orders" aria-labelledby="orders-title">
+    <div class="orders-heading"><div><p class="eyebrow">ОТ ИДЕИ ДО ПЕРВОЙ СТРАНИЦЫ</p><h2 id="orders-title">Мои заказы</h2></div><span class="orders-count">{{ orders|length }} в списке</span></div>
+    {% for order in orders %}
+      <div class="order-row"><span class="order-row-icon" aria-hidden="true">✧</span><div class="order-row-copy"><strong>История для {{ order.child_name }}</strong><small>{{ order.created_at|date:'d.m.Y' }} · {{ order.id }}</small></div><span class="status-badge">{{ order.get_status_display }}</span></div>
+    {% empty %}<div class="order-empty"><p>У вас пока нет заказов.</p><p class="muted">Заказы, отправленные после входа, появятся здесь.</p></div>{% endfor %}
+  </section>
+  <div class="account-profile-note"><span>Личные данные и настройки — в <a href="{% url 'profile' %}">профиле</a>.</span><a href="{% url 'password_change' %}" class="text-link">Изменить пароль</a></div>
+</section>
+{% endblock %}
