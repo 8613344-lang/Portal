@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block title %}Книжная полка · Книги рядом{% endblock %}
+{% block content %}
+<div class="web-shelf">
+  <div class="web-shelf-intro">
+    <div><p class="eyebrow">УСТРАИВАЙТЕСЬ ПОУДОБНЕЕ</p><h1>Книжная полка</h1><p>Выберите книгу — история сразу откроется на весь экран.</p></div>
+    <a class="button secondary" href="{% url 'catalog' %}">Истории наших читателей <span aria-hidden="true">↗</span></a>
+  </div>
+  <section class="web-shelf-section" aria-labelledby="personal-shelf-title">
+    <div class="web-shelf-heading"><h2 id="personal-shelf-title">Персональные книги</h2><span>{{ personal_books.paginator.count }}</span></div>
+    {% if not user.is_authenticated %}<p class="web-shelf-login"><a href="{% url 'login' %}?next={% url 'web-shelf' %}">Войдите</a>, чтобы увидеть книги, созданные для вас.</p>{% endif %}
+    {% include 'library/web_shelf_grid.html' with books=personal_books page_key='mine' empty_message='Персональных книг пока нет.' %}
+  </section>
+  <section class="web-shelf-section" aria-labelledby="public-shelf-title">
+    <div class="web-shelf-heading"><h2 id="public-shelf-title">Публичные книги</h2><span>{{ public_books.paginator.count }}</span></div>
+    {% include 'library/web_shelf_grid.html' with books=public_books page_key='public' empty_message='Публичных книг пока нет.' %}
+  </section>
+</div>
+{% endblock %}

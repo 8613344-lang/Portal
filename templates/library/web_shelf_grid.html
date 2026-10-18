@@ -1,0 +1,15 @@
+<div class="web-shelf-grid">
+{% for book in books %}
+  <a class="web-shelf-book" href="{{ book.app_reader }}">
+    <div class="web-shelf-cover">{% if book.app_cover %}<img src="{{ book.app_cover }}" alt="Обложка: {{ book.title }}" loading="lazy">{% else %}<span class="web-shelf-placeholder" aria-hidden="true">✧<strong>{{ book.title }}</strong></span>{% endif %}<span class="web-shelf-play" aria-hidden="true">▶</span></div>
+    <h3>{{ book.title }}</h3><p>{{ book.age_label }}</p>
+  </a>
+{% empty %}<p class="web-shelf-empty muted">{{ empty_message }}</p>{% endfor %}
+</div>
+{% if books.has_other_pages %}
+<nav class="web-shelf-pagination" aria-label="{% if page_key == 'mine' %}Страницы персональных книг{% else %}Страницы публичных книг{% endif %}">
+  {% if books.has_previous %}<a class="button secondary" href="{% if page_key == 'mine' %}{% querystring mine=books.previous_page_number %}{% else %}{% querystring public=books.previous_page_number %}{% endif %}">← Назад</a>{% endif %}
+  <span>{{ books.number }} / {{ books.paginator.num_pages }}</span>
+  {% if books.has_next %}<a class="button secondary" href="{% if page_key == 'mine' %}{% querystring mine=books.next_page_number %}{% else %}{% querystring public=books.next_page_number %}{% endif %}">Далее →</a>{% endif %}
+</nav>
+{% endif %}

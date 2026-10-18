@@ -48,7 +48,7 @@ class BookAdmin(admin.ModelAdmin):
     readonly_fields = ['viewing_link']
     actions = ['rotate_viewing_links']
 
-    @admin.display(description='Ссылка «Только страница» и QR')
+    @admin.display(description='Ссылка «Начать просмотр» и QR')
     def viewing_link(self, obj):
         if not obj or not obj.pk: return 'Ссылка появится после сохранения книги.'
         return format_html('<a href="{}" target="_blank" rel="noopener">{}</a>', obj.share_url, obj.share_url)

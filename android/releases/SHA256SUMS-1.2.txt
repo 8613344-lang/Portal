@@ -1,0 +1,2 @@
+377fdfb0f9db0d26e49c51811d6f66cb9ed49f1f1ac592b31b96dc013f85f41f  PortalBooks-1.2-debug.apk
+d0de74c42b48c4f797ced5101b1b13bfaa26c57a5514de510026e9c886c92f47  PortalBooks-1.2-release-unsigned.apk

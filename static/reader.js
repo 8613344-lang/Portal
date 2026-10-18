@@ -188,7 +188,8 @@ if (reader && document.querySelector('#page-only')) {
   }
   pageOnly.addEventListener('click', () => setFocus(!focusMode));
   const exitReader = () => {
-    if (reader.dataset.app === 'true') location.assign('/app/?device=' + encodeURIComponent(reader.dataset.device));
+    if (reader.dataset.shelfReturn) location.assign(reader.dataset.shelfReturn);
+    else if (reader.dataset.app === 'true') location.assign('/app/?device=' + encodeURIComponent(reader.dataset.device));
     else setFocus(false);
   };
   document.querySelector('#focus-exit').addEventListener('click', exitReader);

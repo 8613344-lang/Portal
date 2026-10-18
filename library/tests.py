@@ -556,7 +556,7 @@ class PlatformTests(TestCase):
         self.assertNotContains(response, 'id="auto-toggle"')
         self.assertContains(response, 'id="focus-previous"')
         self.assertContains(response, 'id="focus-next"')
-        self.assertContains(response, 'Только страница')
+        self.assertContains(response, 'Начать просмотр')
         self.assertContains(response, 'Вернуть меню')
         self.assertNotContains(response, 'Скачать аудиокнигу MP3')
 
