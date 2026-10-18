@@ -1,4 +1,14 @@
 plugins { id 'com.android.application' }
+
+def releaseEnvironment = [
+    'RUSTORE_KEYSTORE': System.getenv('RUSTORE_KEYSTORE'),
+    'RUSTORE_STORE_PASSWORD': System.getenv('RUSTORE_STORE_PASSWORD'),
+    'RUSTORE_KEY_ALIAS': System.getenv('RUSTORE_KEY_ALIAS'),
+    'RUSTORE_KEY_PASSWORD': System.getenv('RUSTORE_KEY_PASSWORD')
+]
+def hasValue = { value -> value != null && !value.toString().isEmpty() }
+def environmentSigningReady = releaseEnvironment.values().every(hasValue)
+
 android {
     namespace 'ru.portal.books'
     compileSdk 35
@@ -6,23 +16,121 @@ android {
         applicationId 'ru.portal.books'
         minSdk 26
         targetSdk 35
-        versionCode 3
-        versionName '1.2'
+        versionCode 4
+        versionName '1.3'
     }
     buildFeatures { buildConfig true }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     signingConfigs {
         storeRelease {
-            if (System.getenv('RUSTORE_KEYSTORE')) {
-                storeFile file(System.getenv('RUSTORE_KEYSTORE'))
-                storePassword System.getenv('RUSTORE_STORE_PASSWORD')
-                keyAlias System.getenv('RUSTORE_KEY_ALIAS')
-                keyPassword System.getenv('RUSTORE_KEY_PASSWORD')
+            if (environmentSigningReady) {
+                storeFile file(releaseEnvironment['RUSTORE_KEYSTORE'])
+                storePassword releaseEnvironment['RUSTORE_STORE_PASSWORD']
+                keyAlias releaseEnvironment['RUSTORE_KEY_ALIAS']
+                keyPassword releaseEnvironment['RUSTORE_KEY_PASSWORD']
             }
         }
     }
     buildTypes { release {
         minifyEnabled false
-        if (System.getenv('RUSTORE_KEYSTORE')) signingConfig signingConfigs.storeRelease
+        if (environmentSigningReady) signingConfig signingConfigs.storeRelease
     } }
+}
+
+def validateReleaseSigning = tasks.register('validateReleaseSigning') {
+    group = 'verification'
+    description = 'Проверяет настройку подписи release перед сборкой.'
+    doLast {
+        // Android Studio injects these properties for Generate Signed App Bundle / APK.
+        // AGP applies that signing configuration itself; never log property values.
+        def injectedNames = [
+            'android.injected.signing.store.file',
+            'android.injected.signing.store.password',
+            'android.injected.signing.key.alias',
+            'android.injected.signing.key.password'
+        ]
+        def injected = injectedNames.collectEntries { name -> [(name): project.findProperty(name)] }
+        def useInjectedSigning = injected.values().any(hasValue)
+        def signingValues = useInjectedSigning ? injected : releaseEnvironment
+        def missing = signingValues.findAll { name, value -> !hasValue(value) }.keySet()
+        if (!missing.isEmpty()) {
+            throw new GradleException('Release APK должен быть подписан. Задайте ' +
+                missing.join(', ') + ' или используйте Android Studio → Generate Signed App Bundle / APK. ' +
+                'Для установки тестовой версии выполните assembleInstallable. Значения ключей и паролей в журнал не выводятся.')
+        }
+        def keyFile = file(signingValues[useInjectedSigning ? 'android.injected.signing.store.file' : 'RUSTORE_KEYSTORE'])
+        if (!keyFile.isFile()) {
+            throw new GradleException('Файл ключа подписи release не найден. Проверьте путь к keystore; ' +
+                'для тестовой установки используйте assembleInstallable.')
+        }
+    }
+}
+
+tasks.matching { it.name == 'preReleaseBuild' }.configureEach {
+    dependsOn validateReleaseSigning
+}
+
+tasks.register('assembleInstallable') {
+    group = 'build'
+    description = 'Собирает, проверяет и сохраняет подписанный APK для установки в android/releases.'
+    dependsOn 'assembleDebug'
+    doLast {
+        def apkDirectory = layout.buildDirectory.dir('outputs/apk/debug').get().asFile
+        def metadataFile = new File(apkDirectory, 'output-metadata.json')
+        if (!metadataFile.isFile()) {
+            throw new GradleException('Не найдены результаты assembleDebug; установочный APK не экспортирован.')
+        }
+        def metadata = new groovy.json.JsonSlurper().parse(metadataFile)
+        def outputs = metadata.elements
+        if (metadata.applicationId != android.defaultConfig.applicationId || outputs?.size() != 1 ||
+                outputs[0].type != 'SINGLE' || outputs[0].filters) {
+            throw new GradleException('Ожидался один цельный APK приложения; установочный файл не экспортирован.')
+        }
+        def apk = new File(apkDirectory, outputs[0].outputFile.toString())
+        def version = outputs[0].versionName?.toString()
+        if (!apk.isFile() || !(version ==~ /[0-9A-Za-z.+-]+/)) {
+            throw new GradleException('Результат debug-сборки некорректен; установочный APK не экспортирован.')
+        }
+        def windows = System.getProperty('os.name').toLowerCase(java.util.Locale.ROOT).contains('windows')
+        def javaExecutable = new File(System.getProperty('java.home'), windows ? 'bin/java.exe' : 'bin/java')
+        def toolsDirectory = new File(android.sdkDirectory, 'build-tools/' + android.buildToolsVersion)
+        def signer = new File(toolsDirectory, 'lib/apksigner.jar')
+        def aapt = new File(toolsDirectory, windows ? 'aapt.exe' : 'aapt')
+        if (!signer.isFile() || !aapt.isFile()) {
+            throw new GradleException('Для проверки установочного APK нужны apksigner и aapt из Android SDK Build Tools ' +
+                android.buildToolsVersion + '.')
+        }
+        def runCheck = { List command, String failure ->
+            def output = new ByteArrayOutputStream()
+            def result = project.exec {
+                workingDir apkDirectory
+                commandLine command
+                standardOutput = output
+                errorOutput = output
+                ignoreExitValue = true
+            }
+            if (result.exitValue != 0) throw new GradleException(failure)
+            return output.toString('UTF-8')
+        }
+        runCheck([javaExecutable.absolutePath, '-jar', signer.absolutePath, 'verify', apk.name],
+            'APK не прошёл проверку подписи; установочный файл не экспортирован.')
+        def badging = runCheck([aapt.absolutePath, 'dump', 'badging', apk.name],
+            'Не удалось проверить стартовый экран APK; установочный файл не экспортирован.')
+        def packageName = (badging =~ /(?m)^package: name='([^']+)'/)
+        // aapt reports launchable-activity only for an activity with MAIN + LAUNCHER.
+        def launcher = (badging =~ /(?m)^launchable-activity: name='([^']+)'/)
+        if (!packageName.find() || packageName.group(1) != android.defaultConfig.applicationId ||
+                !launcher.find() || launcher.group(1) != android.namespace + '.MainActivity') {
+            throw new GradleException('В APK отсутствует ожидаемый стартовый экран MAIN/LAUNCHER; установочный файл не экспортирован.')
+        }
+        def exportDirectory = rootProject.file('releases')
+        def exportName = 'PortalBooks-' + version + '-install.apk'
+        project.copy {
+            from apk
+            into exportDirectory
+            rename { exportName }
+        }
+        logger.lifecycle('Готов к установке: android/releases/' + exportName + ' (подпись и MAIN/LAUNCHER проверены).')
+        logger.lifecycle('Это тестовая сборка. Для RuStore соберите release с ключом владельца.')
+    }
 }
