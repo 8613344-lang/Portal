@@ -18,3 +18,7 @@ android/**/build/
 android/*.jks
 android/*.keystore
 android/.avd/
+.private/
+*.jks
+*.keystore
+*.clixml

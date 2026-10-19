@@ -188,9 +188,15 @@ def order_success(request):
     if not order_id: return redirect('order')
     return render(request, 'library/order_success.html', {'order_id': order_id})
 
+@never_cache
 def privacy(request):
     agreement = UserAgreement.objects.filter(pk=1).first() or UserAgreement()
-    return render(request, 'library/privacy.html', {'agreement': agreement})
+    app_mode = request.GET.get('app') == '1'
+    return render(request, 'library/privacy.html', {
+        'agreement': agreement, 'app_mode': app_mode,
+        'device': 'tablet' if request.GET.get('device') == 'tablet' else 'phone',
+        'base_template': 'app_base.html' if app_mode else 'base.html',
+    })
 
 def health(request):
     from django.db import connection

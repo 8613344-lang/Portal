@@ -16,8 +16,9 @@ android {
         applicationId 'ru.portal.books'
         minSdk 26
         targetSdk 35
-        versionCode 4
-        versionName '1.3'
+        versionCode 5
+        versionName '1.4'
+        testInstrumentationRunner 'ru.portal.books.OfflineChecks'
     }
     buildFeatures { buildConfig true }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
@@ -70,40 +71,44 @@ tasks.matching { it.name == 'preReleaseBuild' }.configureEach {
     dependsOn validateReleaseSigning
 }
 
-tasks.register('assembleInstallable') {
-    group = 'build'
-    description = 'Собирает, проверяет и сохраняет подписанный APK для установки в android/releases.'
-    dependsOn 'assembleDebug'
-    doLast {
-        def apkDirectory = layout.buildDirectory.dir('outputs/apk/debug').get().asFile
+def readApkOutput = { String variant ->
+        def apkDirectory = layout.buildDirectory.dir('outputs/apk/' + variant).get().asFile
         def metadataFile = new File(apkDirectory, 'output-metadata.json')
         if (!metadataFile.isFile()) {
-            throw new GradleException('Не найдены результаты assembleDebug; установочный APK не экспортирован.')
+            throw new GradleException('Не найдены результаты сборки ' + variant + '; APK не экспортирован.')
         }
         def metadata = new groovy.json.JsonSlurper().parse(metadataFile)
         def outputs = metadata.elements
         if (metadata.applicationId != android.defaultConfig.applicationId || outputs?.size() != 1 ||
                 outputs[0].type != 'SINGLE' || outputs[0].filters) {
-            throw new GradleException('Ожидался один цельный APK приложения; установочный файл не экспортирован.')
+            throw new GradleException('Ожидался один цельный APK приложения; APK не экспортирован.')
         }
         def apk = new File(apkDirectory, outputs[0].outputFile.toString())
         def version = outputs[0].versionName?.toString()
-        if (!apk.isFile() || !(version ==~ /[0-9A-Za-z.+-]+/)) {
-            throw new GradleException('Результат debug-сборки некорректен; установочный APK не экспортирован.')
+        def versionCode = outputs[0].versionCode?.toString()
+        if (!apk.isFile() || apk.canonicalFile.parentFile != apkDirectory.canonicalFile ||
+                !(version ==~ /[0-9A-Za-z.+-]+/) || !(versionCode ==~ /[1-9][0-9]*/) ||
+                version != android.defaultConfig.versionName ||
+                versionCode != android.defaultConfig.versionCode.toString()) {
+            throw new GradleException('Результат сборки или версия APK некорректны; APK не экспортирован.')
         }
+        return [directory: apkDirectory, file: apk, version: version, versionCode: versionCode]
+}
+
+def verifyApk = { Map artifact, boolean forStore ->
         def windows = System.getProperty('os.name').toLowerCase(java.util.Locale.ROOT).contains('windows')
         def javaExecutable = new File(System.getProperty('java.home'), windows ? 'bin/java.exe' : 'bin/java')
         def toolsDirectory = new File(android.sdkDirectory, 'build-tools/' + android.buildToolsVersion)
         def signer = new File(toolsDirectory, 'lib/apksigner.jar')
         def aapt = new File(toolsDirectory, windows ? 'aapt.exe' : 'aapt')
         if (!signer.isFile() || !aapt.isFile()) {
-            throw new GradleException('Для проверки установочного APK нужны apksigner и aapt из Android SDK Build Tools ' +
+            throw new GradleException('Для проверки APK нужны apksigner и aapt из Android SDK Build Tools ' +
                 android.buildToolsVersion + '.')
         }
         def runCheck = { List command, String failure ->
             def output = new ByteArrayOutputStream()
             def result = project.exec {
-                workingDir apkDirectory
+                workingDir artifact.directory
                 commandLine command
                 standardOutput = output
                 errorOutput = output
@@ -112,25 +117,99 @@ tasks.register('assembleInstallable') {
             if (result.exitValue != 0) throw new GradleException(failure)
             return output.toString('UTF-8')
         }
-        runCheck([javaExecutable.absolutePath, '-jar', signer.absolutePath, 'verify', apk.name],
-            'APK не прошёл проверку подписи; установочный файл не экспортирован.')
-        def badging = runCheck([aapt.absolutePath, 'dump', 'badging', apk.name],
-            'Не удалось проверить стартовый экран APK; установочный файл не экспортирован.')
-        def packageName = (badging =~ /(?m)^package: name='([^']+)'/)
+        def certificates = runCheck([javaExecutable.absolutePath, '-jar', signer.absolutePath,
+                'verify', '--verbose', '--print-certs', artifact.file.name],
+            'APK не прошёл проверку подписи; APK не экспортирован.')
+        def badging = runCheck([aapt.absolutePath, 'dump', 'badging', artifact.file.name],
+            'Не удалось проверить стартовый экран APK; APK не экспортирован.')
+        def packageInfo = (badging =~ /(?m)^package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'/)
         // aapt reports launchable-activity only for an activity with MAIN + LAUNCHER.
         def launcher = (badging =~ /(?m)^launchable-activity: name='([^']+)'/)
-        if (!packageName.find() || packageName.group(1) != android.defaultConfig.applicationId ||
+        if (!packageInfo.find() || packageInfo.group(1) != android.defaultConfig.applicationId ||
+                packageInfo.group(2) != artifact.versionCode || packageInfo.group(3) != artifact.version ||
                 !launcher.find() || launcher.group(1) != android.namespace + '.MainActivity') {
-            throw new GradleException('В APK отсутствует ожидаемый стартовый экран MAIN/LAUNCHER; установочный файл не экспортирован.')
+            throw new GradleException('В APK неверны package/version или отсутствует ожидаемый MAIN/LAUNCHER; APK не экспортирован.')
         }
+        def fingerprints = []
+        def certificateMatches = (certificates =~ /(?m)^Signer #(\d+) certificate SHA-256 digest: ([0-9a-fA-F]{64})\s*$/)
+        while (certificateMatches.find()) {
+            fingerprints.add('Signer #' + certificateMatches.group(1) + ' SHA-256: ' +
+                certificateMatches.group(2).toUpperCase(java.util.Locale.ROOT))
+        }
+        if (fingerprints.isEmpty()) {
+            throw new GradleException('Не удалось прочитать SHA-256 сертификата подписанного APK; APK не экспортирован.')
+        }
+        if (forStore) {
+            if ((certificates =~ /(?mi)^Signer #\d+ certificate DN:.*\bCN\s*=\s*"?Android\s+Debug\b/).find()) {
+                throw new GradleException('APK подписан стандартным Android Debug сертификатом. Для RuStore нужен постоянный ключ владельца; APK не экспортирован.')
+            }
+            def manifest = runCheck([aapt.absolutePath, 'dump', 'xmltree', artifact.file.name, 'AndroidManifest.xml'],
+                'Не удалось проверить release-манифест APK; APK не экспортирован.')
+            def developmentFlags = (manifest =~ /(?m)^\s*A: android:(debuggable|testOnly)\([^)]*\)=(.*)$/)
+            while (developmentFlags.find()) {
+                // Missing flags are false. Reject true or an unrecognised representation.
+                if (!(developmentFlags.group(2).trim() ==~ /\(type 0x12\)0x0+/)) {
+                    throw new GradleException('В APK включён ' + developmentFlags.group(1) +
+                        '. Тестовый APK нельзя экспортировать для RuStore.')
+                }
+            }
+            if ((badging =~ /(?m)^application-debuggable\s*$/).find()) {
+                throw new GradleException('В APK включена отладка; APK для RuStore не экспортирован.')
+            }
+        }
+        return fingerprints
+}
+
+tasks.register('assembleInstallable') {
+    group = 'build'
+    description = 'Собирает, проверяет и сохраняет подписанный APK для установки в android/releases.'
+    dependsOn 'assembleDebug'
+    doLast {
+        def artifact = readApkOutput('debug')
+        verifyApk(artifact, false)
         def exportDirectory = rootProject.file('releases')
-        def exportName = 'PortalBooks-' + version + '-install.apk'
+        def exportName = 'PortalBooks-' + artifact.version + '-install.apk'
         project.copy {
-            from apk
+            from artifact.file
             into exportDirectory
             rename { exportName }
         }
         logger.lifecycle('Готов к установке: android/releases/' + exportName + ' (подпись и MAIN/LAUNCHER проверены).')
         logger.lifecycle('Это тестовая сборка. Для RuStore соберите release с ключом владельца.')
+    }
+}
+
+tasks.register('assembleRuStore') {
+    group = 'build'
+    description = 'Собирает и проверяет release APK для RuStore с постоянной подписью владельца.'
+    dependsOn 'assembleRelease'
+    doLast {
+        def artifact = readApkOutput('release')
+        def fingerprints = verifyApk(artifact, true)
+        def exportDirectory = rootProject.file('releases')
+        def exportName = 'PortalBooks-' + artifact.version + '-rustore.apk'
+        project.copy {
+            from artifact.file
+            into exportDirectory
+            rename { exportName }
+        }
+        def exportedApk = new File(exportDirectory, exportName)
+        def digest = java.security.MessageDigest.getInstance('SHA-256')
+        exportedApk.withInputStream { input ->
+            byte[] buffer = new byte[65536]
+            int count
+            while ((count = input.read(buffer)) != -1) digest.update(buffer, 0, count)
+        }
+        def sha256 = digest.digest().collect { String.format('%02x', it & 0xff) }.join()
+        new File(exportDirectory, exportName + '.sha256').setText(sha256 + '  ' + exportName + '\n', 'UTF-8')
+        new File(exportDirectory, exportName.replace('.apk', '-certificate.txt')).setText(
+            'Package: ' + android.defaultConfig.applicationId + '\nVersion: ' + artifact.version +
+            '\nVersion code: ' + artifact.versionCode + '\nAPK SHA-256: ' + sha256 + '\n' +
+            'Build type: release\nDebuggable: false\nTest only: false\nDebug certificate: false\n' +
+            'Launcher: ' + android.namespace + '.MainActivity\n' +
+            fingerprints.join('\n') + '\n', 'UTF-8')
+        logger.lifecycle('Готов к загрузке в RuStore: android/releases/' + exportName +
+            ' (подпись владельца, версия, MAIN/LAUNCHER и release-манифест проверены).')
+        logger.lifecycle('Рядом сохранены SHA-256 APK и открытые отпечатки сертификата; ключи и пароли не экспортируются.')
     }
 }

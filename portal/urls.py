@@ -19,6 +19,7 @@ urlpatterns = [
     path('shelf/', app_views.web_shelf, name='web-shelf'),
     path('app/login/', app_views.AppLoginView.as_view(), name='app-login'),
     path('app/logout/', app_views.app_logout, name='app-logout'),
+    path('app/account/delete/', app_views.account_delete, name='app-account-delete'),
     path('health/', views.health, name='health'),
     path('', views.home, name='home'),
     path('audio-previews/<int:position>/', views.audio_preview, name='audio-preview'),

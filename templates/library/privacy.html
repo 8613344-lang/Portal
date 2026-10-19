@@ -1,7 +1,8 @@
-{% extends 'base.html' %}
+{% extends base_template %}
 {% block title %}{{ agreement.title }} · Книги рядом{% endblock %}
 {% block content %}
 <article class="legal section">
+  {% if app_mode %}<p><a href="{% url 'app-shelf' %}?device={{ device }}">← К книгам</a></p>{% endif %}
   <p class="eyebrow">ДОКУМЕНТЫ САЙТА</p>
   <h1 class="page-title">{{ agreement.title }}</h1>
   {% if agreement.updated_at %}<p class="muted legal-updated">Обновлено: <time datetime="{{ agreement.updated_at|date:'c' }}">{{ agreement.updated_at|date:'d.m.Y' }}</time></p>{% endif %}
