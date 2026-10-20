@@ -19,7 +19,7 @@ from .exports import ExportError, book_pdf
 from .models import BookVideo
 from .sheets import book_sheets, reader_spread
 
-RENDERER_VERSION = 1
+RENDERER_VERSION = 2
 WIDTH, HEIGHT = 1280, 720
 
 

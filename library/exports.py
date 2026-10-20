@@ -36,8 +36,7 @@ def book_pdf(book, pages):
     from reportlab.pdfgen.canvas import Canvas
     from reportlab.platypus import Paragraph
     from reportlab.graphics import renderPDF
-    from reportlab.graphics.shapes import Drawing
-    from reportlab.graphics.barcode.qr import QrCodeWidget
+    from .qr import qr_drawing
 
     with font_lock:
         if 'BookSerif' not in pdfmetrics.getRegisteredFontNames():
@@ -182,36 +181,43 @@ def book_pdf(book, pages):
         else:
             background(leaf_number)
             if end_picture: full_picture(end_picture, preserve=True)
-        url = book.share_url
         ink = colors.HexColor(book.ending_text_color)
-        if end_picture and (book.ending_show_text or book.ending_show_qr):
+        codes = []
+        if book.ending_show_qr: codes.append(('book', book.share_url, 'Читать книгу'))
+        if book.ending_show_video_qr: codes.append(('video', book.video_share_url, 'Смотреть видео'))
+        size, padding, label_height, gap = 44*mm, 6*mm, (8*mm if book.ending_show_text else 0), 8*mm
+        paragraph, used = None, 0
+        if book.ending_show_text and (book.ending_title or book.ending_text):
+            value = ('<b>'+text(book.ending_title)+'</b><br/><br/>' if book.ending_title else '') + text(book.ending_text).replace('\n','<br/>')
+            pdfmetrics.registerFontFamily('BookSerif', normal='BookSerif', bold='BookSerifBold')
+            text_width = content_width - 2*padding - (size+gap if len(codes) == 1 else 0)
+            paragraph, used = fit_paragraph(value, text_width, 70*mm, maximum=14, minimum=9,
+                                            centered=len(codes) != 1, identifier='Последняя страница')
+        qr_height = size+label_height if codes else 0
+        # Align text with the printed modules, below the code's white quiet zone.
+        text_inset = 5*mm if len(codes) == 1 else 0
+        block_height = (qr_height+gap+used if paragraph else qr_height) if len(codes) == 2 else max(qr_height, used+text_inset)
+        panel_height = max(44*mm, block_height) + 2*padding
+        panel_bottom = 22*mm
+        top = panel_bottom+panel_height-padding
+        if end_picture and (paragraph or codes):
             canvas.saveState()
             canvas.setFillColor(colors.HexColor(book.ending_panel_color))
             canvas.setFillAlpha((100-book.ending_panel_transparency)/100)
-            canvas.roundRect(margin, 22*mm, content_width, 88*mm, 4*mm, fill=1,stroke=0)
+            canvas.roundRect(margin, panel_bottom, content_width, panel_height, 4*mm, fill=1,stroke=0)
             canvas.restoreState()
-        if book.ending_show_text:
-            if end_picture:
-                available_width = content_width-58*mm if book.ending_show_qr else content_width-12*mm
-                value = '<b>'+text(book.ending_title)+'</b><br/><br/>'+text(book.ending_text).replace('\n','<br/>') if book.ending_title else text(book.ending_text).replace('\n','<br/>')
-                # Use a registered bold family for <b> in the overlay.
-                pdfmetrics.registerFontFamily('BookSerif',normal='BookSerif',bold='BookSerifBold')
-                paragraph, used = fit_paragraph(value, available_width, 70*mm, maximum=14, minimum=9, identifier='Последняя страница')
-                paragraph.drawOn(canvas,margin+6*mm,100*mm-used)
-            else:
-                draw_paragraph(text(book.ending_title),height-60*mm,40*mm,maximum=28,minimum=18,centered=True,bold=True)
-                draw_paragraph(text(book.ending_text).replace('\n','<br/>'),height-110*mm,40*mm,maximum=14,centered=True)
-        if book.ending_show_qr:
-            qr = QrCodeWidget(url, barFillColor=colors.HexColor(book.ending_qr_color))
-            bounds = qr.getBounds()
-            size = (44 if end_picture else 55)*mm
-            drawing = Drawing(size,size,transform=[size/(bounds[2]-bounds[0]),0,0,size/(bounds[3]-bounds[1]),0,0])
-            drawing.add(qr)
-            x = width-margin-size-6*mm if end_picture else (width-size)/2
-            y = 34*mm if end_picture else 75*mm
-            renderPDF.draw(drawing,canvas,x,y)
+        if paragraph:
+            text_top = top-qr_height-gap if len(codes) == 2 else top-text_inset
+            paragraph.drawOn(canvas, margin+padding, text_top-used)
+        for index, (kind, url, label) in enumerate(codes):
+            x = (width-2*size-12*mm)/2+index*(size+12*mm) if len(codes) == 2 else width-margin-padding-size
+            y = top-size
+            renderPDF.draw(qr_drawing(url, size, kind, book.ending_qr_color), canvas, x, y)
             canvas.linkURL(url,(x,y,x+size,y+size),relative=0)
-            if not end_picture: draw_paragraph(escape(url),62*mm,30*mm,maximum=12,minimum=8,centered=True)
+            if book.ending_show_text:
+                canvas.setFillColor(ink)
+                canvas.setFont('BookSerif', 10)
+                canvas.drawCentredString(x+size/2, y-5*mm, label)
         canvas.showPage()
         canvas.save()
         output.seek(0)

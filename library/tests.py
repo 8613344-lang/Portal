@@ -472,7 +472,7 @@ class PlatformTests(TestCase):
         self.assertEqual(len(pdf.pages), 3)
         self.assertIn('Секретная книга', pdf.pages[0].extract_text())
         self.assertIn('Секретный текст', pdf.pages[1].extract_text())
-        self.assertIn('https://books.example.test/', pdf.pages[-1].extract_text())
+        self.assertEqual(str(pdf.pages[-1]['/Annots'][0].get_object()['/A']['/URI']), self.private.share_url)
         fonts = pdf.pages[1]['/Resources']['/Font'].get_object()
         self.assertTrue(any('/FontFile2' in font.get_object().get('/FontDescriptor', {}) for font in fonts.values()))
 

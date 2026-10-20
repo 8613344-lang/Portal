@@ -1,0 +1,6 @@
+<div class="ending-layout{% if ending_qrs|length == 2 %} two-codes{% endif %}">
+  {% if ending_qrs %}<div class="ending-qr-row">
+    {% for code in ending_qrs %}<a class="project-qr" href="{% if app_mode and code.kind == 'video' %}{% url 'book-video' book.slug %}?app=1&amp;device={{ device }}{% else %}{{ code.url }}{% endif %}" aria-label="{{ code.label }}">{{ code.svg|safe }}{% if book.ending_show_text %}<span>{{ code.label }}</span>{% endif %}</a>{% endfor %}
+  </div>{% endif %}
+  {% if book.ending_show_text %}<div class="ending-copy"><h2>{{ book.ending_title }}</h2><div>{{ book.ending_text|linebreaks }}</div></div>{% endif %}
+</div>

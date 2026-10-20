@@ -37,16 +37,14 @@
         {% if current.pdf_full_page %}
           <h1 class="sr-only">{{ current.display_title|default:current.title }}</h1>
           {% if current.illustration %}<img class="page-illustration" src="{{ current.illustration.url }}" alt="{{ current.title }}">{% endif %}
-          {% if current.kind == 'ending' %}{% if book.ending_show_text or book.ending_show_qr %}<div class="sheet-overlay">
-            {% if book.ending_show_text %}<div class="ending-copy"><h2>{{ book.ending_title }}</h2><div>{{ book.ending_text|linebreaks }}</div></div>{% endif %}
-            {% if book.ending_show_qr %}<a class="project-qr" href="{{ book.share_url }}" aria-label="Открыть эту книгу">{{ project_qr|safe }}</a>{% endif %}
+          {% if current.kind == 'ending' %}{% if book.ending_show_text or ending_qrs %}<div class="sheet-overlay">
+            {% include 'library/ending_content.html' %}
           </div>{% endif %}{% endif %}
         {% else %}
           <p class="eyebrow">{% if current.kind == 'cover' %}ОБЛОЖКА{% elif current.kind == 'ending' %}ПОСЛЕДНЯЯ СТРАНИЦА{% else %}СТРАНИЦА {{ number }} / {{ total }}{% endif %}</p>
-          {% if current.kind != 'ending' or book.ending_show_text %}<h1>{{ current.display_title|default:current.title }}</h1>{% endif %}
+          {% if current.kind != 'ending' %}<h1>{{ current.display_title|default:current.title }}</h1>{% endif %}
           {% if current.illustration %}<img class="page-illustration" src="{{ current.illustration.url }}" alt="{{ current.title }}">{% endif %}
-          {% if current.kind != 'ending' or book.ending_show_text %}<div class="story-text">{{ current.text|linebreaks }}</div>{% endif %}
-          {% if current.kind == 'ending' and book.ending_show_qr %}<a class="project-qr" href="{{ book.share_url }}" aria-label="Открыть эту книгу">{{ project_qr|safe }}</a>{% endif %}
+          {% if current.kind != 'ending' %}<div class="story-text">{{ current.text|linebreaks }}</div>{% else %}{% include 'library/ending_content.html' %}{% endif %}
         {% endif %}
       </article>
       {% if spread.split_story or spread.pages|length > 1 %}

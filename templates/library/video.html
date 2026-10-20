@@ -1,17 +1,17 @@
 {% extends base_template %}{% block title %}{{ book.title }} · Видео{% endblock %}
 {% block content %}
-<section class="video-page" data-book-video data-video-revision="{{ video.revision }}" data-status-url="{% url 'book-video-status' book.slug %}" data-pdf-url="{% url 'book-export' book.slug 'pdf' %}" data-video-url="{% url 'book-video' book.slug %}">
-  <a class="text-link" href="{% url 'reader' book.slug %}{% if app_mode %}?app=1&amp;device={{ device }}{% endif %}">← Читать книгу</a>
+<section class="video-page" data-book-video data-video-revision="{{ video.revision }}" data-status-url="{% url 'book-video-status' book.slug %}" {% if can_manage_video %}data-pdf-url="{% url 'book-export' book.slug 'pdf' %}"{% endif %} data-video-url="{% url 'book-video' book.slug %}">
+  {% if can_manage_video %}<a class="text-link" href="{% url 'reader' book.slug %}{% if app_mode %}?app=1&amp;device={{ device }}{% endif %}">← Читать книгу</a>{% endif %}
   <h1>{{ book.title }} · Видео</h1>
-  <p>MP4 с иллюстрациями, текстом и загруженной озвучкой. Обложка и последняя страница тоже включаются. Готовое видео хранится на сервере и используется повторно.</p>
+  <p>MP4 с иллюстрациями, текстом и загруженной озвучкой. Обложка и последняя страница тоже включаются.</p>
   <video class="book-video" controls playsinline preload="metadata" {% if not video.file %}hidden{% else %}src="{{ video.file }}"{% endif %}></video>
   <div class="video-progress" role="status">Проверяем видео…</div>
   <div class="video-actions"><a class="button primary video-download" {% if not video.file %}hidden{% else %}href="{{ video.file }}?download=1"{% endif %}>Скачать MP4</a></div>
-  <form class="video-actions video-create" method="post" action="{% url 'book-video-create' book.slug %}">
+  {% if can_manage_video %}<form class="video-actions video-create" method="post" action="{% url 'book-video-create' book.slug %}">
     {% csrf_token %}
     <label>Без озвучки: <input name="delay" type="number" min="3" max="300" value="{{ video.delay }}" required> сек.</label>
     <button class="button secondary" type="submit">Создать видео</button>
   </form>
-  <p class="muted">Если на развороте есть записи, длительность определяется аудио; иначе используется выбранное время. Первая сборка выполняется в фоне. После изменения книги или времени потребуется новая версия видео.</p>
+  <p class="muted">Если на развороте есть записи, длительность определяется аудио; иначе используется выбранное время. Первая сборка выполняется в фоне. После изменения книги или времени потребуется новая версия видео.</p>{% endif %}
 </section>
 {% endblock %}

@@ -41,17 +41,17 @@ def reader_spread(book, sheets, number):
                     'next': groups[group_index + 1][0] if group_index + 1 < len(groups) else 0,
                     'label': str(start) if len(pages) == 1 else f'{start}–{start + len(pages) - 1}'}
 
-def project_qr(book=None):
+def project_qr(book=None, kind='book'):
     from django.conf import settings
-    from reportlab.graphics.shapes import Drawing
-    from reportlab.graphics.barcode.qr import QrCodeWidget
-    from reportlab.lib.colors import HexColor
-    qr = QrCodeWidget(book.share_url if book else settings.SITE_URL.rstrip('/')+'/', barFillColor=HexColor(book.ending_qr_color if book else '#000000'))
-    bounds = qr.getBounds()
-    size = 160
-    drawing = Drawing(size,size,transform=[size/(bounds[2]-bounds[0]),0,0,size/(bounds[3]-bounds[1]),0,0])
-    drawing.add(qr)
-    svg = drawing.asString('svg')
-    if isinstance(svg, bytes):
-        svg = svg.decode('utf-8')
-    return svg[svg.index('<svg'):svg.rindex('</svg>') + 6]
+    from .qr import qr_svg
+    url = (book.video_share_url if kind == 'video' else book.share_url) if book else settings.SITE_URL.rstrip('/')+'/'
+    return qr_svg(url, kind, book.ending_qr_color if book else '#000000')
+
+
+def ending_qrs(book):
+    codes = []
+    if book.ending_show_qr:
+        codes.append({'kind': 'book', 'url': book.share_url, 'label': 'Читать книгу', 'svg': project_qr(book)})
+    if book.ending_show_video_qr:
+        codes.append({'kind': 'video', 'url': book.video_share_url, 'label': 'Смотреть видео', 'svg': project_qr(book, 'video')})
+    return codes

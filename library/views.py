@@ -12,7 +12,7 @@ from django.views.decorators.http import require_http_methods, require_POST
 from .forms import OrderForm, PageAudioForm
 from .models import Book, BookPage, Notification, NotificationRecipient, Order
 from .models import UserAgreement, HomepagePromotion, AudioPreview
-from .sheets import book_sheets, project_qr, reader_spread
+from .sheets import book_sheets, ending_qrs, reader_spread
 from django.urls import reverse
 
 def home(request):
@@ -77,7 +77,7 @@ def reader(request, slug, shared=False):
     audio_action = reverse('page-audio', args=[current.pk]) if current.kind == 'story' else reverse('sheet-audio', args=[book.slug, current.kind])
     app_mode = request.GET.get('app') == '1'
     shelf_mode = request.GET.get('shelf') == '1' and not app_mode
-    return render(request, 'library/reader.html', {'book': book, 'shared': shared or app_mode or shelf_mode, 'app_mode': app_mode, 'shelf_mode': shelf_mode, 'shelf_return_url': reverse('web-shelf') if shelf_mode else '', 'device': 'tablet' if request.GET.get('device') == 'tablet' else 'phone', 'base_template': 'app_base.html' if app_mode else 'base.html', 'pages': pages, 'current': current, 'spread': reader_spread(book, pages, number), 'number': number, 'total': len(pages), 'previous': number - 1, 'next': number + 1, 'can_edit': can_edit, 'audio_form': PageAudioForm(), 'audio_action':audio_action, 'project_qr':project_qr(book) if current.kind == 'ending' and book.ending_show_qr else '', 'audio_count': sum(bool(p.audio) for p in pages)})
+    return render(request, 'library/reader.html', {'book': book, 'shared': shared or app_mode or shelf_mode, 'app_mode': app_mode, 'shelf_mode': shelf_mode, 'shelf_return_url': reverse('web-shelf') if shelf_mode else '', 'device': 'tablet' if request.GET.get('device') == 'tablet' else 'phone', 'base_template': 'app_base.html' if app_mode else 'base.html', 'pages': pages, 'current': current, 'spread': reader_spread(book, pages, number), 'number': number, 'total': len(pages), 'previous': number - 1, 'next': number + 1, 'can_edit': can_edit, 'audio_form': PageAudioForm(), 'audio_action':audio_action, 'ending_qrs': ending_qrs(book) if current.kind == 'ending' else [], 'audio_count': sum(bool(p.audio) for p in pages)})
 
 @never_cache
 @require_http_methods(['GET'])

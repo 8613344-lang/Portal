@@ -26,6 +26,7 @@ urlpatterns = [
     path('audio-previews/<int:position>/', views.audio_preview, name='audio-preview'),
     path('books/', views.catalog, name='catalog'),
     path('read/<uuid:token>/', views.shared_reader, name='shared-reader'),
+    path('watch/<uuid:token>/', video_views.shared_video, name='shared-video'),
     path('books/<slug:slug>/', views.reader, name='reader'),
     path('books/<slug:slug>/video/', video_views.watch, name='book-video'),
     path('books/<slug:slug>/video/status/', video_views.status, name='book-video-status'),

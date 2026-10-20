@@ -26,6 +26,7 @@ class Book(models.Model):
     title = models.CharField('Название', max_length=200)
     slug = models.SlugField('Адрес', max_length=120, unique=True)
     share_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    video_share_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     description = models.TextField('Описание', blank=True)
     child_name = models.CharField('Имя героя', max_length=100, blank=True)
     age_label = models.CharField('Возраст читателей', max_length=60, default='Для детей от 2 до 5 лет')
@@ -37,7 +38,9 @@ class Book(models.Model):
     ending_full_page = models.BooleanField('Последняя страница целиком из картинки', default=False)
     ending_page = models.ForeignKey('BookPage', verbose_name='Лист книги для последней страницы', null=True, blank=True, on_delete=models.SET_NULL, related_name='+')
     ending_audio = models.FileField('Озвучка последней страницы MP3 / WAV', upload_to=private_path, blank=True, validators=[validate_audio])
-    ending_show_qr = models.BooleanField('Показывать QR-код на последней странице', default=True)
+    ending_show_qr = models.BooleanField('QR-код книги на последней странице', default=True)
+    ending_show_video_qr = models.BooleanField('QR-код видео на последней странице', default=False,
+        help_text='Ссылка открывает видео без регистрации. После настройки QR создайте или пересоздайте MP4 в разделе «Видео». Можно включить оба QR-кода.')
     ending_show_text = models.BooleanField('Показывать текст на последней странице', default=True)
     ending_title = models.CharField('Заголовок последней страницы', max_length=200, blank=True, default='Продолжение начинается здесь')
     ending_text = models.TextField('Текст последней страницы', blank=True, default='Новые истории и персональные книги для вашего ребёнка.')
@@ -61,6 +64,10 @@ class Book(models.Model):
     def share_url(self):
         from django.urls import reverse
         return settings.SITE_URL.rstrip('/') + reverse('shared-reader', args=[self.share_token])
+    @property
+    def video_share_url(self):
+        from django.urls import reverse
+        return settings.SITE_URL.rstrip('/') + reverse('shared-video', args=[self.video_share_token])
     @property
     def ending_panel_css(self):
         value = self.ending_panel_color.lstrip('#')

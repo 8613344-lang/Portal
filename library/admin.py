@@ -45,13 +45,18 @@ class AccessInline(admin.TabularInline):
 
 @admin.register(Book)
 class BookAdmin(admin.ModelAdmin):
-    readonly_fields = ['viewing_link', 'video_status']
-    actions = ['rotate_viewing_links']
+    readonly_fields = ['viewing_link', 'video_viewing_link', 'video_status']
+    actions = ['rotate_viewing_links', 'rotate_video_links']
 
     @admin.display(description='Ссылка «Начать просмотр» и QR')
     def viewing_link(self, obj):
         if not obj or not obj.pk: return 'Ссылка появится после сохранения книги.'
         return format_html('<a href="{}" target="_blank" rel="noopener">{}</a>', obj.share_url, obj.share_url)
+
+    @admin.display(description='Ссылка на видео без регистрации и QR')
+    def video_viewing_link(self, obj):
+        if not obj or not obj.pk: return 'Ссылка появится после сохранения книги.'
+        return format_html('<a href="{}" target="_blank" rel="noopener">{}</a>', obj.video_share_url, obj.video_share_url)
 
     @admin.display(description='Видео MP4')
     def video_status(self, obj):
@@ -69,6 +74,13 @@ class BookAdmin(admin.ModelAdmin):
             book.save(update_fields=['share_token'])
         self.message_user(request, 'Созданы новые ссылки. Старые ссылки и QR-коды больше не работают; выгрузите PDF заново.')
 
+    @admin.action(description='Создать новые ссылки видео (отозвать старые)', permissions=['change'])
+    def rotate_video_links(self, request, queryset):
+        for book in queryset:
+            book.video_share_token = uuid.uuid4()
+            book.save(update_fields=['video_share_token'])
+        self.message_user(request, 'Созданы новые ссылки видео. Старые ссылки и QR видео отозваны; пересоздайте видео и выгрузите PDF заново.')
+
     form = BookAdminForm
     list_display = ['title', 'status', 'visibility', 'created_at']
     list_filter = ['status', 'visibility', 'pdf_layout', 'background_theme']
@@ -78,10 +90,10 @@ class BookAdmin(admin.ModelAdmin):
     view_on_site = False
     fieldsets = [('Книга', {'fields': ('title', 'slug', 'description', 'child_name', 'age_label')}),
                  ('Обложка', {'fields': ('cover', 'cover_page', 'cover_full_page', 'cover_audio')}),
-                 ('Последняя страница', {'fields': ('ending_image', 'ending_page', 'ending_full_page', 'ending_audio', 'ending_show_qr', 'ending_show_text', 'ending_title', 'ending_text', 'ending_panel_color', 'ending_panel_transparency', 'ending_text_color', 'ending_qr_color')}),
+                 ('Последняя страница', {'fields': ('ending_image', 'ending_page', 'ending_full_page', 'ending_audio', 'ending_show_qr', 'ending_show_video_qr', 'ending_show_text', 'ending_title', 'ending_text', 'ending_panel_color', 'ending_panel_transparency', 'ending_text_color', 'ending_qr_color'), 'description': 'Один QR: текст слева, не выше кода. Два QR: текст под обоими кодами. Заголовок входит в текстовый блок.'}),
                  ('Оформление и PDF', {'fields': ('pdf_layout', 'background_theme', 'background_image', 'video_status')}),
                  ('Импорт из PDF', {'fields': ('source_pdf',), 'description': 'При создании книги загрузите PDF: все листы автоматически станут страницами. Без текстового слоя листы сохраняются картинками.'}),
-                 ('Публикация и доступ', {'fields': ('status', 'visibility', 'viewing_link'), 'description': 'Ссылка даёт просмотр этой книги без регистрации при любом статусе и доступе. Её использует QR в PDF. Для отзыва выберите действие создания новых ссылок в списке книг.'})]
+                 ('Публикация и доступ', {'fields': ('status', 'visibility', 'viewing_link', 'video_viewing_link'), 'description': 'Обе ссылки работают без регистрации при любом статусе книги. Ссылка видео разрешает только просмотр и скачивание MP4. Для отзыва выберите действие создания новых ссылок книги или видео в списке книг.'})]
 
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)
