@@ -6,6 +6,7 @@ from library import app_views, account_views, video_views
 from library.authentication import EmailAuthenticationForm
 
 urlpatterns = [
+    path('yandex_09163709ffc9d3bb.html', views.yandex_verification, name='yandex-verification'),
     path('accounts/confirm/start/', account_views.confirmation_start, name='email-start'),
     path('accounts/captcha/', account_views.captcha, name='captcha'),
     path('accounts/confirm/', account_views.confirm, name='email-confirm'),

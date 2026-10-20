@@ -1,5 +1,6 @@
 import re
 import uuid
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
@@ -14,6 +15,13 @@ from .models import Book, BookPage, Notification, NotificationRecipient, Order
 from .models import UserAgreement, HomepagePromotion, AudioPreview
 from .sheets import book_sheets, ending_qrs, reader_spread
 from django.urls import reverse
+
+
+@require_http_methods(['GET', 'HEAD'])
+def yandex_verification(request):
+    return HttpResponse((settings.BASE_DIR / 'yandex_09163709ffc9d3bb.html').read_bytes(),
+                        content_type='text/html; charset=utf-8')
+
 
 def home(request):
     public_books = Book.objects.filter(status='published', visibility='public')
