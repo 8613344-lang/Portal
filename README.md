@@ -22,6 +22,8 @@
 
 ## Технологии
 
+Видео книги: фоновая сборка MP4 с загруженной озвучкой, приватный серверный кэш и отдельный просмотр. [Использование и worker](docs/VIDEO.md).
+
 Django 5.2, HTML-шаблоны, небольшой JavaScript, PostgreSQL 17, Gunicorn, WhiteNoise и Caddy. Локально поддерживаются SQLite и Waitress на Windows. Закрытые тексты не включаются в JavaScript-бандл.
 
 Docker Compose запускает `db`, `app`, `worker`, `gateway`. Только `gateway` публикует 443. Файлы хранятся в приватном постоянном volume, заявки и права — в PostgreSQL.
@@ -73,6 +75,6 @@ python manage.py test
 
 ## Android-приложение
 
-[Установка и сборка Android](docs/ANDROID.md). Готовый release: [PortalBooks-1.4-rustore.apk](android/releases/PortalBooks-1.4-rustore.apk). [Комплект RuStore](rustore/qicko-rustore-kit-1.4.zip) и [пошаговая публикация](docs/RUSTORE.md). Клиент показывает персональные книги перед публичными, открывает просмотр, сохраняет PDF для нативного чтения без интернета. Поддерживаются телефон и планшет, конфиденциальность и удаление аккаунта. Ключ первой публикации хранится отдельно от Git; [резервное копирование](docs/SIGNING.md).
+[Установка и сборка Android](docs/ANDROID.md). Готовый release: [PortalBooks-1.5-rustore.apk](android/releases/PortalBooks-1.5-rustore.apk). [Комплект RuStore](rustore/qicko-rustore-kit-1.5.zip) и [пошаговая публикация](docs/RUSTORE.md). Клиент показывает персональные книги перед публичными, открывает просмотр, сохраняет PDF для нативного чтения без интернета. Поддерживаются телефон и планшет, конфиденциальность и удаление аккаунта. Ключ первой публикации хранится отдельно от Git; [резервное копирование](docs/SIGNING.md).
 
 Вход по email, подтверждение кодом и капча, профиль и восстановление: [Аккаунты](docs/ACCOUNTS.md). Android сразу подключается к qicko.ru. [Материалы и алгоритм RuStore](docs/RUSTORE.md).

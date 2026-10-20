@@ -9,3 +9,10 @@ __pycache__
 backups
 test-results
 *.pyc
+.private
+*.jks
+*.keystore
+*.clixml
+android/.gradle
+android/.avd
+android/**/build

@@ -46,6 +46,20 @@ services:
     depends_on:
       app: {condition: service_healthy}
     networks: [backend]
+  video_worker:
+    build: .
+    restart: unless-stopped
+    command: ["python", "manage.py", "run_videos"]
+    env_file: .env
+    environment:
+      POSTGRES_HOST: db
+      DEBUG: "0"
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
+    volumes:
+      - private_media:/app/media
+    depends_on:
+      app: {condition: service_healthy}
+    networks: [backend]
   gateway:
     image: caddy:2-alpine
     restart: unless-stopped

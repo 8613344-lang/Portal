@@ -1,0 +1,10 @@
+Package: ru.portal.books
+Version: 1.5
+Version code: 6
+APK SHA-256: 257668f8be78504cf08384c80dea9cc5ca98c618c885dd59d181f2f9fd5995dc
+Build type: release
+Debuggable: false
+Test only: false
+Debug certificate: false
+Launcher: ru.portal.books.MainActivity
+Signer #1 SHA-256: A64BEBFBD8C4A38B2D20315526B2961A6D8057ED4327B8A2215A4B66A6DF6971

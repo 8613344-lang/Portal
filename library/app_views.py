@@ -15,10 +15,18 @@ from django.views.decorators.http import require_POST, require_http_methods
 from .models import Book, BookPage, NotificationRecipient
 from .authentication import EmailAuthenticationForm
 from .app_forms import DeleteAccountForm
+from django.http import JsonResponse
 
 
 def device_mode(request):
     return 'tablet' if request.GET.get('device') == 'tablet' else 'phone'
+
+
+@never_cache
+@require_http_methods(['GET'])
+def context(request):
+    return JsonResponse({'account': str(request.user.pk) if request.user.is_authenticated else 'guest',
+                         'label': request.user.email if request.user.is_authenticated else 'Гость'})
 
 
 @never_cache

@@ -11,7 +11,7 @@ if (reader && document.querySelector('#page-only')) {
   let focusMode = false, running = false, changing = false;
   let interval = null, controller = null, controlsTimer = null;
   let generation = 0, track = 0;
-  const observer = new ResizeObserver(() => fitPage());
+  const observer = window.ResizeObserver ? new ResizeObserver(() => fitPage()) : {observe(){}, disconnect(){}};
   const clearTimer = () => { clearInterval(interval); interval = null; };
   const recordings = () => {
     const spread = reader.querySelector('.focus-spread');
@@ -21,15 +21,31 @@ if (reader && document.querySelector('#page-only')) {
 
   function fitPage() {
     if (!focusMode) return;
+    const height = window.visualViewport && window.visualViewport.scale <= 1.01 ? window.visualViewport.height : innerHeight;
+    document.body.style.setProperty('--reader-height', `${height}px`);
     const page = reader.querySelector('.focus-spread') || reader.querySelector('.reading-page');
     if (!page) return;
+    const controlsHeight = document.querySelector('.focus-controls').offsetHeight;
+    const availableHeight = Math.max(100, height - Math.max(controlsHeight + 24, 80));
+    if (page.classList.contains('focus-spread')) {
+      const stacked = innerHeight > innerWidth;
+      page.classList.toggle('stacked', stacked);
+      page.style.width = stacked ? '600px' : '1200px';
+      page.style.height = stacked ? '1708px' : '840px';
+    } else if (page.classList.contains('pdf-leaf')) {
+      page.style.width = '720px';
+      page.style.maxWidth = 'none';
+    } else {
+      page.style.width = Math.min(900, Math.max(320, innerWidth-24)) + 'px';
+    }
     const textLeaf = page.querySelector('.spread-text');
     if (textLeaf) {
       const text = textLeaf.querySelector('.story-text');
       text.style.fontSize = '18px';
       for (let size = 17; textLeaf.scrollHeight > textLeaf.clientHeight + 1 && size >= 8; size--) text.style.fontSize = `${size}px`;
     }
-    const scale = Math.min(1, (innerWidth-24)/page.offsetWidth, (innerHeight-24)/page.offsetHeight);
+    const scale = Math.min(1, (innerWidth-24)/page.offsetWidth, availableHeight/page.offsetHeight);
+    page.style.top = `${availableHeight/2 + 8}px`;
     page.style.setProperty('--page-scale', String(scale));
   }
   function updateControls() {
@@ -46,6 +62,7 @@ if (reader && document.querySelector('#page-only')) {
     const page = reader.querySelector('.focus-spread') || original;
     document.body.style.setProperty('--book-background', getComputedStyle(original).backgroundImage);
     observer.observe(page);
+    observer.observe(document.querySelector('.focus-controls'));
     page.querySelectorAll('img').forEach(img => img.addEventListener('load', fitPage, {once:true}));
     updateControls();
     requestAnimationFrame(fitPage);
@@ -81,6 +98,7 @@ if (reader && document.querySelector('#page-only')) {
     if (!enabled) stop();
     else reader.querySelectorAll('audio').forEach(audio => audio.pause());
     focusMode = enabled;
+    if (window.bookScreenAwake) window.bookScreenAwake(enabled);
     document.body.classList.toggle('book-focus', enabled);
     pageOnly.setAttribute('aria-pressed', String(enabled));
     track = 0;
@@ -199,6 +217,7 @@ if (reader && document.querySelector('#page-only')) {
   document.addEventListener('pointermove', showControls);
   reader.addEventListener('pointerdown', showControls);
   window.addEventListener('resize', fitPage);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', fitPage);
   document.addEventListener('keydown', event => {
     if (!focusMode || event.target.closest('input,textarea,select')) return;
     if (event.key === 'Escape') { event.preventDefault(); exitReader(); }
@@ -217,5 +236,6 @@ if (reader && document.querySelector('#page-only')) {
     }
   });
   window.addEventListener('pagehide', () => stop());
+  window.addEventListener('pageshow', () => { if (focusMode && window.bookScreenAwake) window.bookScreenAwake(true); });
   if (reader.dataset.autostart === 'true') setFocus(true);
 }

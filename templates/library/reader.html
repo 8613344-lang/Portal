@@ -1,7 +1,7 @@
 {% extends base_template|default:'base.html' %}
 {% block title %}{{ book.title }} · Книги рядом{% endblock %}
 {% block content %}
-<section class="reader-shell" data-book-reader data-app="{{ app_mode|yesno:'true,false' }}" data-device="{{ device }}" data-shelf-return="{{ shelf_return_url }}" data-autostart="{{ shared|yesno:'true,false' }}" data-number="{{ number }}" data-total="{{ total }}" data-focus-previous="{{ spread.previous }}" data-focus-next="{{ spread.next }}" data-focus-label="{{ spread.label }}">
+<section class="reader-shell" data-book-reader data-pdf-url="{% url 'book-export' book.slug 'pdf' %}" data-video-url="{% url 'book-video' book.slug %}" data-account="{% if user.is_authenticated %}{{ user.pk }}{% else %}guest{% endif %}" data-app="{{ app_mode|yesno:'true,false' }}" data-device="{{ device }}" data-shelf-return="{{ shelf_return_url }}" data-autostart="{{ shared|yesno:'true,false' }}" data-number="{{ number }}" data-total="{{ total }}" data-focus-previous="{{ spread.previous }}" data-focus-next="{{ spread.next }}" data-focus-label="{{ spread.label }}">
   <div class="reader-top">
     <a class="text-link" href="{% if shelf_mode %}{% url 'web-shelf' %}{% elif user.is_authenticated %}{% url 'account' %}{% else %}{% url 'catalog' %}{% endif %}">← К книгам</a>
     <span>{{ book.title }}</span><button class="text-link print-button" type="button">Печать страницы</button>
@@ -9,6 +9,7 @@
   <div class="book-tools">
     <div class="book-downloads">
       <a class="button secondary" href="{% url 'book-export' book.slug 'pdf' %}">Скачать книгу PDF</a>
+      <a class="button secondary" href="{% url 'book-video' book.slug %}{% if app_mode %}?app=1&amp;device={{ device }}{% endif %}">Видео книги · MP4</a>
       {% if audio_count %}<a class="button secondary" href="{% url 'book-export' book.slug 'mp3' %}">Скачать аудиокнигу MP3</a>{% endif %}
       <p class="muted">PDF: обложка, иллюстрации и последняя страница. {% if audio_count %}В MP3 войдут записи {{ audio_count }} из {{ total }} страниц по порядку.{% else %}Для MP3 сначала добавьте записи страниц.{% endif %}</p>
     </div>
@@ -22,6 +23,7 @@
     <button type="button" id="focus-previous" aria-label="Предыдущая страница">← Назад</button>
     <button type="button" id="focus-play" aria-pressed="false">▶ Авточтение</button>
     <button type="button" id="focus-next" aria-label="Следующая страница">Вперёд →</button>
+    <a id="focus-video" href="{% url 'book-video' book.slug %}{% if app_mode %}?app=1&amp;device={{ device }}{% endif %}">▶ Видео</a>
     <span id="focus-number">{{ number }} / {{ total }}</span>
     <label for="page-delay">Без аудио: <input id="page-delay" type="number" min="3" max="300" value="15"> сек.</label>
     <span id="auto-status" role="status"></span>
@@ -30,8 +32,8 @@
   <div class="reader-layout">
     <aside class="contents"><p class="eyebrow">СОДЕРЖАНИЕ</p><ol>{% for page in pages %}<li><a class="{% if page.pk == current.pk %}active{% endif %}" href="{% querystring page=forloop.counter %}"><span>{{ forloop.counter|stringformat:'02d' }}</span>{{ page.title }}</a></li>{% endfor %}</ol></aside>
     <div class="reader-main">
-      <div class="reading-sheet">
-      <article class="reading-page background-{{ book.background_theme }}{% if current.pdf_full_page %} pdf-leaf{% endif %}" style="--ending-panel:{{ book.ending_panel_css }};--ending-ink:{{ book.ending_text_color }};{% if current.kind == 'ending' %}color:{{ book.ending_text_color }};{% endif %}{% if book.background_theme == 'custom' and book.background_image %}background-image:url('{{ book.background_image.url }}'){% endif %}">
+      <div class="reading-sheet{% if spread.pages|length > 1 or spread.split_story %} has-spread{% endif %}">
+      <article class="reading-page background-{{ book.background_theme }}{% if current.illustration %} has-illustration{% endif %}{% if current.pdf_full_page %} pdf-leaf{% endif %}" style="--ending-panel:{{ book.ending_panel_css }};--ending-ink:{{ book.ending_text_color }};{% if current.kind == 'ending' %}color:{{ book.ending_text_color }};{% endif %}{% if book.background_theme == 'custom' and book.background_image %}background-image:url('{{ book.background_image.url }}'){% endif %}">
         {% if current.pdf_full_page %}
           <h1 class="sr-only">{{ current.display_title|default:current.title }}</h1>
           {% if current.illustration %}<img class="page-illustration" src="{{ current.illustration.url }}" alt="{{ current.title }}">{% endif %}

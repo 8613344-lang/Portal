@@ -257,10 +257,10 @@ def audio_preview(request, position):
     return stream_upload(request, preview.audio)
 
 
-def stream_upload(request, file_field):
+def stream_upload(request, file_field, mime=None, filename=None, attachment=False):
     if not file_field or not file_field.storage.exists(file_field.name): raise Http404
     path = file_field.name
-    mime = 'audio/mpeg' if path.lower().endswith('.mp3') else 'audio/wav' if path.lower().endswith('.wav') else 'image/jpeg'
+    mime = mime or ('audio/mpeg' if path.lower().endswith('.mp3') else 'audio/wav' if path.lower().endswith('.wav') else 'image/jpeg')
     size = file_field.size
     range_header = request.headers.get('Range', '')
     start, end, status = 0, size - 1, 200
@@ -288,6 +288,9 @@ def stream_upload(request, file_field):
     response['Content-Length'] = str(length)
     response['Accept-Ranges'] = 'bytes'
     response['Content-Disposition'] = 'inline; filename="page-audio' + ('.mp3"' if mime == 'audio/mpeg' else '.wav"' if mime == 'audio/wav' else '.jpg"')
+    if filename:
+        from django.utils.http import content_disposition_header
+        response['Content-Disposition'] = content_disposition_header(attachment, filename)
     response['Cache-Control'] = 'private, no-store'
     response['X-Content-Type-Options'] = 'nosniff'
     if status == 206: response['Content-Range'] = f'bytes {start}-{end}/{size}'

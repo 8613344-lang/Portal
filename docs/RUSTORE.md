@@ -1,15 +1,15 @@
 # Qicko: сборка APK и публикация в RuStore
 
-Версия **1.4, versionCode 5**, пакет **ru.portal.books**. Один APK для телефона и планшета, Android 8.0+. Сервер https://qicko.ru/ задан в приложении. Первая публикация: создан постоянный ключ, APK подписан им. В магазин приложение автоматически не отправлялось.
+Версия **1.5, versionCode 6**, пакет **ru.portal.books**. Один APK для телефона и планшета, Android 8.0+. Сервер https://qicko.ru/ задан в приложении. Первая публикация: создан постоянный ключ, APK подписан им. В магазин приложение автоматически не отправлялось.
 
 ## 1. Файлы комплекта
 
 | Файл | Назначение |
 | --- | --- |
-| [PortalBooks-1.4-rustore.apk](../android/releases/PortalBooks-1.4-rustore.apk) | **Загрузить в RuStore Консоль** |
-| [qicko-rustore-kit-1.4.zip](../rustore/qicko-rustore-kit-1.4.zip) | APK, исходники Android, инструкции, материалы карточки |
-| PortalBooks-1.4-rustore.apk.sha256 | Контрольная сумма |
-| PortalBooks-1.4-rustore-certificate.txt | Отпечаток сертификата и проверка release |
+| [PortalBooks-1.5-rustore.apk](../android/releases/PortalBooks-1.5-rustore.apk) | **Загрузить в RuStore Консоль** |
+| [qicko-rustore-kit-1.5.zip](../rustore/qicko-rustore-kit-1.5.zip) | APK, исходники Android, инструкции, материалы карточки |
+| PortalBooks-1.5-rustore.apk.sha256 | Контрольная сумма |
+| PortalBooks-1.5-rustore-certificate.txt | Отпечаток сертификата и проверка release |
 | rustore/listing.json | Тексты карточки, поля владельца для заполнения |
 | rustore/icon-512.png | Иконка 512×512 |
 | rustore/phone/ и rustore/tablet/ | По три скриншота |
@@ -44,9 +44,9 @@
 Скрипт читает локальный зашифрованный пароль, собирает release, выполняет lint и проверяет подпись, пакет, версию, MAIN/LAUNCHER и отсутствие отладки. Результат в android/releases:
 
 ~~~text
-PortalBooks-1.4-rustore.apk
-PortalBooks-1.4-rustore.apk.sha256
-PortalBooks-1.4-rustore-certificate.txt
+PortalBooks-1.5-rustore.apk
+PortalBooks-1.5-rustore.apk.sha256
+PortalBooks-1.5-rustore-certificate.txt
 ~~~
 
 Если JDK/SDK установлены по другим путям:
@@ -83,6 +83,8 @@ SHA-256 сертификата должен совпадать с отчётом
 Справки: [подпись Android](https://developer.android.com/studio/publish/app-signing), [apksigner](https://developer.android.com/tools/apksigner).
 
 ## 6. Обновите сервер и проверьте
+
+Для MP4 требуется новый сервис video_worker; Docker Compose запускает его автоматически. При запуске без Docker отдельно выполните manage.py run_videos. Сначала обновите сервер — затем APK. [Подробно о видео](VIDEO.md).
 
 Сайт этой версии содержит метаданные офлайн-полки, документ внутри приложения и удаление аккаунта. Перед публикацией:
 
@@ -125,8 +127,8 @@ docker compose up -d --build
 
 ## 9. Загрузка и карточка
 
-1. Добавьте приложение, загрузите PortalBooks-1.4-rustore.apk.
-2. Проверьте пакет ru.portal.books, версию 1.4, код 5.
+1. Добавьте приложение, загрузите PortalBooks-1.5-rustore.apk.
+2. Проверьте пакет ru.portal.books, версию 1.5, код 6.
 3. Перенесите тексты из listing.json, заполните оставшиеся поля.
 4. Загрузите icon-512.png, три снимка phone и три tablet.
 5. Укажите поддержку, политику, категорию, возраст, сведения о данных; заявляйте телефон и планшет.

@@ -7,7 +7,7 @@ from django.contrib.auth.models import User
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import UserChangeForm
 from .models import Book, BookPage, BookAccess, Order, NotificationRecipient, Notification
-from .models import UserAgreement, HomepagePromotion, AudioPreview
+from .models import UserAgreement, HomepagePromotion, AudioPreview, BookVideo
 from .forms import BookAdminForm
 
 admin.site.site_header = 'Книги рядом · управление'
@@ -45,13 +45,22 @@ class AccessInline(admin.TabularInline):
 
 @admin.register(Book)
 class BookAdmin(admin.ModelAdmin):
-    readonly_fields = ['viewing_link']
+    readonly_fields = ['viewing_link', 'video_status']
     actions = ['rotate_viewing_links']
 
     @admin.display(description='Ссылка «Начать просмотр» и QR')
     def viewing_link(self, obj):
         if not obj or not obj.pk: return 'Ссылка появится после сохранения книги.'
         return format_html('<a href="{}" target="_blank" rel="noopener">{}</a>', obj.share_url, obj.share_url)
+
+    @admin.display(description='Видео MP4')
+    def video_status(self, obj):
+        if not obj or not obj.pk: return 'Сохраните книгу, чтобы создать видео.'
+        from django.urls import reverse
+        video = BookVideo.objects.filter(book=obj).first()
+        label = video.get_state_display() if video else 'Ещё не создано'
+        return format_html('{} · <a href="{}">Открыть просмотр и сборку видео</a>',
+                           label, reverse('book-video', args=[obj.slug]))
 
     @admin.action(description='Создать новые ссылки просмотра (отозвать старые)', permissions=['change'])
     def rotate_viewing_links(self, request, queryset):
@@ -70,7 +79,7 @@ class BookAdmin(admin.ModelAdmin):
     fieldsets = [('Книга', {'fields': ('title', 'slug', 'description', 'child_name', 'age_label')}),
                  ('Обложка', {'fields': ('cover', 'cover_page', 'cover_full_page', 'cover_audio')}),
                  ('Последняя страница', {'fields': ('ending_image', 'ending_page', 'ending_full_page', 'ending_audio', 'ending_show_qr', 'ending_show_text', 'ending_title', 'ending_text', 'ending_panel_color', 'ending_panel_transparency', 'ending_text_color', 'ending_qr_color')}),
-                 ('Оформление и PDF', {'fields': ('pdf_layout', 'background_theme', 'background_image')}),
+                 ('Оформление и PDF', {'fields': ('pdf_layout', 'background_theme', 'background_image', 'video_status')}),
                  ('Импорт из PDF', {'fields': ('source_pdf',), 'description': 'При создании книги загрузите PDF: все листы автоматически станут страницами. Без текстового слоя листы сохраняются картинками.'}),
                  ('Публикация и доступ', {'fields': ('status', 'visibility', 'viewing_link'), 'description': 'Ссылка даёт просмотр этой книги без регистрации при любом статусе и доступе. Её использует QR в PDF. Для отзыва выберите действие создания новых ссылок в списке книг.'})]
 

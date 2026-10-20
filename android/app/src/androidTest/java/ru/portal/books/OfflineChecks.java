@@ -76,6 +76,21 @@ public final class OfflineChecks extends Instrumentation {
             });
             check(visible[0] && !visible[1], "Guest offline shelf exposed a different account's book.");
             passed("Guest and personal offline shelves are isolated.");
+            Object readable = list("guest").get(0);
+            Class<?> readableClass = Class.forName("ru.portal.books.OfflineBooks$Book", true, target.getClassLoader());
+            runOnMainSync(() -> invokeActivity("openOfflineBook", new Class<?>[]{readableClass}, readable));
+            final int screenFlag = android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON;
+            runOnMainSync(() -> check((activity.getWindow().getAttributes().flags & screenFlag) != 0, "PDF reading must keep the screen on."));
+            runOnMainSync(() -> { callActivityOnPause(activity); check((activity.getWindow().getAttributes().flags & screenFlag) == 0, "Background app must release the screen."); });
+            runOnMainSync(() -> { callActivityOnResume(activity); check((activity.getWindow().getAttributes().flags & screenFlag) != 0, "Returning to reading must restore screen-on."); });
+            runOnMainSync(() -> { invokeActivity("showOfflineShelf", new Class<?>[0]); check((activity.getWindow().getAttributes().flags & screenFlag) == 0, "A downloads list must allow sleep."); });
+            passed("PDF reading keeps screen on; pause/list release it and resume restores it.");
+            Class<?> downloader = Class.forName("ru.portal.books.VideoDownload", true, target.getClassLoader());
+            Method allowedVideo = method(downloader, "allowed", Uri.class);
+            check((boolean) allowedVideo.invoke(null, Uri.parse("https://qicko.ru/books/example/video/file/?download=1")), "Expected MP4 endpoint.");
+            for (String url : new String[]{"http://qicko.ru/books/example/video/file/", "https://other.test/books/example/video/file/", "https://qicko.ru/books/example/video/file/?next=evil", "https://qicko.ru:444/books/example/video/file/"})
+                check(!(boolean) allowedVideo.invoke(null, Uri.parse(url)), "Unsafe video address accepted.");
+            passed("Native MP4 export rejects foreign origins, HTTP, unexpected ports and parameters.");
 
             runOnMainSync(() -> invokeActivity("updateOfflineAccount", new Class<?>[]{String.class, String.class}, "22", "fixture@example.test"));
             drainDownloads();

@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import path
 from library import views
-from library import app_views, account_views
+from library import app_views, account_views, video_views
 from library.authentication import EmailAuthenticationForm
 
 urlpatterns = [
@@ -16,6 +16,7 @@ urlpatterns = [
     path('accounts/reset/<uidb64>/<token>/', auth_views.PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
     path('accounts/reset/done/', auth_views.PasswordResetCompleteView.as_view(), name='password_reset_complete'),
     path('app/', app_views.shelf, name='app-shelf'),
+    path('app/context/', app_views.context, name='app-context'),
     path('shelf/', app_views.web_shelf, name='web-shelf'),
     path('app/login/', app_views.AppLoginView.as_view(), name='app-login'),
     path('app/logout/', app_views.app_logout, name='app-logout'),
@@ -26,6 +27,10 @@ urlpatterns = [
     path('books/', views.catalog, name='catalog'),
     path('read/<uuid:token>/', views.shared_reader, name='shared-reader'),
     path('books/<slug:slug>/', views.reader, name='reader'),
+    path('books/<slug:slug>/video/', video_views.watch, name='book-video'),
+    path('books/<slug:slug>/video/status/', video_views.status, name='book-video-status'),
+    path('books/<slug:slug>/video/create/', video_views.create, name='book-video-create'),
+    path('books/<slug:slug>/video/file/', video_views.file, name='book-video-file'),
     path('books/<slug:slug>/download/<str:format>/', views.export_book, name='book-export'),
     path('pages/<int:pk>/audio/', views.page_audio, name='page-audio'),
     path('books/<slug:slug>/audio/<str:kind>/', views.sheet_audio, name='sheet-audio'),

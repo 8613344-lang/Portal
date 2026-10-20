@@ -1,6 +1,6 @@
-# Комплект Qicko для RuStore — 1.4
+# Комплект Qicko для RuStore — 1.5
 
-Загружать в магазин: **android/releases/PortalBooks-1.4-rustore.apk**.
+Загружать в магазин: **android/releases/PortalBooks-1.5-rustore.apk**.
 
 Полная пошаговая инструкция: **docs/RUSTORE.md**.
 Хранение ключа и перенос: **docs/SIGNING.md**.

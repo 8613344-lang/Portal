@@ -88,6 +88,26 @@ class Book(models.Model):
         if self.background_theme == 'custom' and not self.background_image:
             raise ValidationError({'background_image': 'Для своего фона загрузите картинку.'})
 
+class BookVideo(models.Model):
+    book = models.OneToOneField(Book, on_delete=models.CASCADE, related_name='video', verbose_name='Книга')
+    fingerprint = models.CharField(max_length=64)
+    delay = models.PositiveSmallIntegerField('Секунд без озвучки', default=15, validators=[MinValueValidator(3), MaxValueValidator(300)])
+    state = models.CharField('Состояние', max_length=12, default='queued', choices=[('queued', 'В очереди'), ('rendering', 'Создаётся'), ('ready', 'Готово'), ('failed', 'Ошибка')], db_index=True)
+    file = models.FileField('Видео MP4', upload_to=private_path, blank=True)
+    progress = models.PositiveIntegerField(default=0)
+    total = models.PositiveIntegerField(default=0)
+    error = models.CharField(max_length=300, blank=True)
+    lease_token = models.UUIDField(null=True, blank=True)
+    lease_until = models.DateTimeField(null=True, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Видео книги'
+        verbose_name_plural = 'Видео книг'
+
+    def __str__(self): return str(self.book)
+
+
 class BookPage(models.Model):
     book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name='pages', verbose_name='Книга')
     position = models.PositiveIntegerField('Номер страницы')

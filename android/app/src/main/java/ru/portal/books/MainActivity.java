@@ -16,6 +16,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
+import android.view.WindowManager;
 import android.webkit.CookieManager;
 import android.webkit.RenderProcessGoneDetail;
 import android.webkit.SslErrorHandler;
@@ -38,6 +39,10 @@ import org.json.JSONObject;
 import org.json.JSONTokener;
 
 import java.io.IOException;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.text.DateFormat;
 import java.util.Date;
 import java.util.List;
@@ -68,6 +73,15 @@ public class MainActivity extends Activity {
     private String currentPdf;
     private String currentTitle;
     private boolean downloading;
+    private boolean resumed;
+    private String currentVideo;
+    private Button videoButton;
+    private String pendingVideo, pendingVideoCookies;
+    private boolean contextLoading;
+    private boolean saveRequestedAfterContext;
+    private View customVideo;
+    private WebChromeClient.CustomViewCallback customVideoCallback;
+    private static final int SAVE_VIDEO = 1001;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -141,6 +155,12 @@ public class MainActivity extends Activity {
         saveOffline.setEnabled(false);
         saveOffline.setOnClickListener(view -> confirmOfflineDownload());
         nativeMenu.addView(saveOffline, new LinearLayout.LayoutParams(0, -1, 1));
+        videoButton = nativeButton("Видео");
+        videoButton.setEnabled(false);
+        videoButton.setOnClickListener(view -> {
+            if (currentVideo != null && web != null) web.loadUrl(withMode(currentVideo, true));
+        });
+        nativeMenu.addView(videoButton, new LinearLayout.LayoutParams(0, -1, 1));
         Button offline = nativeButton("Без интернета");
         offline.setOnClickListener(view -> showOfflineShelf());
         nativeMenu.addView(offline, new LinearLayout.LayoutParams(0, -1, 1));
@@ -164,6 +184,9 @@ public class MainActivity extends Activity {
             web = candidate;
             WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
             WebSettings settings = candidate.getSettings();
+            settings.setUseWideViewPort(true);
+            settings.setLoadWithOverviewMode(false);
+            settings.setTextZoom(100);
             settings.setJavaScriptEnabled(true);
             settings.setDomStorageEnabled(true);
             settings.setAllowFileAccess(false);
@@ -175,6 +198,14 @@ public class MainActivity extends Activity {
             CookieManager.getInstance().setAcceptCookie(true);
             CookieManager.getInstance().setAcceptThirdPartyCookies(candidate, false);
             candidate.setWebChromeClient(new WebChromeClient() {
+                @Override public void onShowCustomView(View view, CustomViewCallback callback) {
+                    if (customVideo != null) { callback.onCustomViewHidden(); return; }
+                    customVideo = view; customVideoCallback = callback;
+                    root.addView(view, new FrameLayout.LayoutParams(-1, -1));
+                    nativeMenu.setVisibility(View.GONE);
+                    updateScreenAwake();
+                }
+                @Override public void onHideCustomView() { closeCustomVideo(); }
                 @Override public void onProgressChanged(WebView view, int value) {
                     if (view != web) return;
                     progress.setProgress(value);
@@ -189,8 +220,12 @@ public class MainActivity extends Activity {
                     loading.setVisibility(View.VISIBLE);
                     view.setVisibility(View.VISIBLE);
                     currentPdf = null;
-                    saveOffline.setEnabled(false);
+                    saveRequestedAfterContext = false;
                     Uri address = Uri.parse(url);
+                    currentVideo = videoAddress(address);
+                    saveOffline.setEnabled(bookPage(address.getPath()) && !downloading);
+                    videoButton.setEnabled(currentVideo != null);
+                    updateScreenAwake();
                     if (sameServer(address) && ("/app/logout/".equals(address.getPath()) || "1".equals(address.getQueryParameter("account_deleted")))) forgetOfflineAccount();
                     nativeMenu.bringToFront();
                 }
@@ -201,6 +236,9 @@ public class MainActivity extends Activity {
                     Uri uri = request.getUrl();
                     if (!sameServer(uri)) return true;
                     String path = uri.getPath();
+                    if (VideoDownload.allowed(uri) && "1".equals(uri.getQueryParameter("download"))) {
+                        chooseVideoFile(uri.toString()); return true;
+                    }
                     if (path != null && (path.startsWith("/accounts/password-reset/") || path.startsWith("/accounts/register/"))) {
                         openBrowser(uri);
                         return true;
@@ -249,6 +287,9 @@ public class MainActivity extends Activity {
                 }
             });
             root.addView(candidate, 0, contentParams());
+            candidate.setDownloadListener((url, userAgent, disposition, mime, length) -> {
+                if (VideoDownload.allowed(Uri.parse(url))) chooseVideoFile(url);
+            });
             return true;
         } catch (RuntimeException | LinkageError error) {
             Log.e(TAG, "WebView initialization failed", error);
@@ -261,6 +302,7 @@ public class MainActivity extends Activity {
     private void showFailure(String title, String message) {
         if (isFinishing() || isDestroyed()) return;
         mainFrameFailed = true;
+        updateScreenAwake();
         progress.setVisibility(View.GONE);
         loading.setVisibility(View.GONE);
         if (web != null) web.setVisibility(View.INVISIBLE);
@@ -273,6 +315,7 @@ public class MainActivity extends Activity {
     }
 
     private void destroyWebView() {
+        closeCustomVideo();
         WebView previous = web;
         web = null;
         if (previous == null) return;
@@ -304,6 +347,14 @@ public class MainActivity extends Activity {
 
     private boolean bookPage(String path) {
         return path != null && ((path.startsWith("/books/") && !"/books/".equals(path)) || path.startsWith("/read/"));
+    }
+
+    private String videoAddress(Uri uri) {
+        if (!sameServer(uri) || uri.getPath() == null) return null;
+        String[] parts = uri.getPath().split("/");
+        if (parts.length >= 3 && "books".equals(parts[1]) && parts[2].matches("[A-Za-z0-9_-]+"))
+            return ORIGIN + "/books/" + parts[2] + "/video/";
+        return null;
     }
 
     private boolean allowedPage(Uri uri) {
@@ -342,23 +393,28 @@ public class MainActivity extends Activity {
     }
 
     private void inspectAccountAndBook(WebView source, String pageUrl) {
-        String script = "(()=>{const m=document.querySelector('meta[name=portal-account]');const l=document.querySelector('meta[name=portal-account-label]');const a=document.querySelector('a[href*=\"/download/pdf/\"]');const t=document.querySelector('.reader-top>span');return JSON.stringify({account:m?m.content:null,label:l?l.content:'',pdf:a?a.href:null,title:t?t.textContent:document.title})})()";
+        String script = "(()=>{const r=document.querySelector('[data-book-reader],[data-book-video]');const m=document.querySelector('meta[name=portal-account]');const l=document.querySelector('meta[name=portal-account-label]');const a=document.querySelector('a[href*=\"/download/pdf/\"]');const t=document.querySelector('.reader-top>span');return JSON.stringify({account:m?m.content:(r?r.getAttribute('data-account'):null),label:l?l.content:'',pdf:r?r.getAttribute('data-pdf-url'):(a?a.href:null),title:t?t.textContent:document.title})})()";
         source.evaluateJavascript(script, value -> {
-            if (isDestroyed() || source != web || !pageUrl.equals(source.getUrl())) return;
+            if (isDestroyed() || source != web || !sameBookDocument(pageUrl, source.getUrl())) return;
             try {
                 Object result = new JSONTokener(value).nextValue();
                 if (!(result instanceof String)) return;
                 JSONObject data = new JSONObject((String) result);
                 String detected = data.optString("account", "");
-                if (!detected.matches("guest|[0-9]{1,20}")) return;
+                if (!detected.matches("guest|[0-9]{1,20}")) { recoverBookContext(source, pageUrl); return; }
                 String label = data.optString("label", "Гость");
                 if (label.length() > 150) label = label.substring(0, 150);
                 updateOfflineAccount(detected, label);
                 String pdf = data.optString("pdf", "");
+                if (pdf.startsWith("/")) pdf = ORIGIN + pdf;
                 currentPdf = OfflineBooks.pdfAddress(Uri.parse(pdf)) ? pdf : null;
+                if (currentPdf == null && currentVideo != null) currentPdf = currentVideo.replace("/video/", "/download/pdf/");
+                if (currentPdf != null) currentVideo = currentPdf.replace("/download/pdf/", "/video/");
+                videoButton.setEnabled(currentVideo != null);
                 currentTitle = data.optString("title", "Книга").trim();
                 if (currentTitle.length() > 200) currentTitle = currentTitle.substring(0, 200);
-                saveOffline.setEnabled(currentPdf != null && !downloading && offlineScreen == null);
+                saveOffline.setEnabled(bookPage(Uri.parse(pageUrl).getPath()) && !downloading && offlineScreen == null);
+                updateScreenAwake();
             } catch (Exception error) { Log.w(TAG, "Could not inspect book metadata", error); }
         });
     }
@@ -385,7 +441,13 @@ public class MainActivity extends Activity {
     }
 
     private void confirmOfflineDownload() {
-        if (currentPdf == null || downloading) return;
+        if (downloading) return;
+        if (currentPdf == null) {
+            saveRequestedAfterContext = true;
+            if (web != null) recoverBookContext(web, web.getUrl());
+            Toast.makeText(this, "Проверяем доступ к файлу книги…", Toast.LENGTH_LONG).show();
+            return;
+        }
         new AlertDialog.Builder(this).setTitle("Сохранить книгу без интернета?")
             .setMessage("Сохраним PDF «" + currentTitle + "» во внутренней памяти приложения. Озвучка доступна онлайн. Копия останется до удаления книги или выхода из аккаунта; отзыв доступа на сайте не удаляет уже сохранённый PDF.")
             .setNegativeButton("Отмена", null).setPositiveButton("Сохранить", (dialog, which) -> downloadCurrentBook()).show();
@@ -449,6 +511,7 @@ public class MainActivity extends Activity {
         content.addView(status);
         scroll.addView(content);
         offlineScreen = scroll;
+        updateScreenAwake();
         root.addView(scroll, contentParams());
         nativeMenu.bringToFront();
         saveOffline.setEnabled(false);
@@ -483,6 +546,7 @@ public class MainActivity extends Activity {
         closeOfflineScreen();
         offlineReader = new OfflinePdfView(this, offlineBooks, book, this::showOfflineShelf);
         offlineScreen = offlineReader;
+        updateScreenAwake();
         root.addView(offlineScreen, contentParams());
         nativeMenu.bringToFront();
         saveOffline.setEnabled(false);
@@ -491,7 +555,114 @@ public class MainActivity extends Activity {
     private void closeOfflineScreen() {
         if (offlineReader != null) { offlineReader.close(); offlineReader = null; }
         if (offlineScreen != null) { root.removeView(offlineScreen); offlineScreen = null; }
-        if (saveOffline != null) saveOffline.setEnabled(currentPdf != null && !downloading);
+        if (saveOffline != null) saveOffline.setEnabled(web != null && bookPage(Uri.parse(web.getUrl() == null ? "" : web.getUrl()).getPath()) && !downloading);
+        updateScreenAwake();
+    }
+
+    private void recoverBookContext(WebView source, String pageUrl) {
+        if (contextLoading || pageUrl == null || !sameServer(Uri.parse(pageUrl))) return;
+        final String address = videoAddress(Uri.parse(pageUrl));
+        if (address == null) return;
+        final String cookies = CookieManager.getInstance().getCookie(ORIGIN + "/");
+        contextLoading = true;
+        downloads.execute(() -> {
+            JSONObject metadata = null;
+            HttpURLConnection connection = null;
+            try {
+                connection = (HttpURLConnection) new URL(ORIGIN + "/app/context/").openConnection();
+                connection.setInstanceFollowRedirects(false);
+                connection.setConnectTimeout(10000);
+                connection.setReadTimeout(10000);
+                if (cookies != null) connection.setRequestProperty("Cookie", cookies);
+                if (connection.getResponseCode() != 200) throw new IOException("Context unavailable");
+                try (InputStream input = connection.getInputStream(); ByteArrayOutputStream bytes = new ByteArrayOutputStream()) {
+                    byte[] buffer = new byte[1024]; int count;
+                    while ((count = input.read(buffer)) != -1) {
+                        if (bytes.size() + count > 16384) throw new IOException("Context too large");
+                        bytes.write(buffer, 0, count);
+                    }
+                    metadata = new JSONObject(bytes.toString("UTF-8"));
+                }
+            } catch (Exception ignored) { }
+            finally { if (connection != null) connection.disconnect(); }
+            final JSONObject result = metadata;
+            runOnUiThread(() -> {
+                contextLoading = false;
+                if (isDestroyed() || source != web || !sameBookDocument(pageUrl, source.getUrl())) return;
+                if (result == null) {
+                    if (saveRequestedAfterContext) Toast.makeText(this, "Сохранение недоступно. Повторите после загрузки книги или обратитесь к владельцу сайта.", Toast.LENGTH_LONG).show();
+                    saveRequestedAfterContext = false;
+                    return;
+                }
+                String owner = result.optString("account", "");
+                if (!owner.matches("guest|[0-9]{1,20}")) return;
+                updateOfflineAccount(owner, result.optString("label", "Ваш аккаунт"));
+                currentPdf = address.replace("/video/", "/download/pdf/");
+                currentVideo = address;
+                currentTitle = source.getTitle() == null ? "Книга" : source.getTitle();
+                saveOffline.setEnabled(!downloading && offlineScreen == null);
+                videoButton.setEnabled(true);
+                if (saveRequestedAfterContext) { saveRequestedAfterContext = false; confirmOfflineDownload(); }
+            });
+        });
+    }
+
+    private boolean sameBookDocument(String first, String second) {
+        if (first == null || second == null) return false;
+        Uri a = Uri.parse(first), b = Uri.parse(second);
+        return sameServer(a) && sameServer(b) && a.getPath() != null && a.getPath().equals(b.getPath());
+    }
+
+    private void updateScreenAwake() {
+        String url = web == null ? null : web.getUrl();
+        boolean reading = customVideo != null || (offlineScreen != null ? offlineReader != null :
+            !mainFrameFailed && url != null && bookPage(Uri.parse(url).getPath()));
+        if (resumed && reading) getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        else getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    }
+
+    private void closeCustomVideo() {
+        if (customVideo == null) return;
+        root.removeView(customVideo);
+        customVideo = null;
+        nativeMenu.setVisibility(View.VISIBLE);
+        WebChromeClient.CustomViewCallback callback = customVideoCallback;
+        customVideoCallback = null;
+        if (callback != null) callback.onCustomViewHidden();
+        updateScreenAwake();
+    }
+
+    private void chooseVideoFile(String url) {
+        if (!VideoDownload.allowed(Uri.parse(url)) || pendingVideo != null) return;
+        pendingVideo = url;
+        pendingVideoCookies = CookieManager.getInstance().getCookie(ORIGIN + "/");
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("video/mp4");
+        intent.putExtra(Intent.EXTRA_TITLE, Uri.parse(url).getPath().split("/")[2] + ".mp4");
+        try { startActivityForResult(intent, SAVE_VIDEO); }
+        catch (ActivityNotFoundException error) {
+            pendingVideo = null; pendingVideoCookies = null;
+            Toast.makeText(this, "На устройстве недоступен выбор папки. Скачайте видео через сайт.", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    @Override protected void onActivityResult(int request, int result, Intent data) {
+        super.onActivityResult(request, result, data);
+        if (request != SAVE_VIDEO) return;
+        final String url = pendingVideo, cookies = pendingVideoCookies;
+        pendingVideo = null; pendingVideoCookies = null;
+        if (result != RESULT_OK || data == null || data.getData() == null || url == null ||
+                !"content".equalsIgnoreCase(data.getData().getScheme())) return;
+        final Uri destination = data.getData();
+        Toast.makeText(this, "Сохраняем видео в выбранный файл…", Toast.LENGTH_LONG).show();
+        downloads.execute(() -> {
+            String message;
+            try { VideoDownload.save(this, destination, url, cookies); message = "Видео сохранено."; }
+            catch (IOException | RuntimeException error) { message = "Не удалось сохранить видео. Проверьте соединение и повторите."; }
+            final String notice = message;
+            runOnUiThread(() -> { if (!isDestroyed()) Toast.makeText(this, notice, Toast.LENGTH_LONG).show(); });
+        });
     }
 
     @Override public void onConfigurationChanged(Configuration configuration) {
@@ -502,6 +673,7 @@ public class MainActivity extends Activity {
         if (url != null && allowedPage(Uri.parse(url))) web.loadUrl(withMode(url, bookPage(Uri.parse(url).getPath())));
     }
     @Override public void onBackPressed() {
+        if (customVideo != null) { closeCustomVideo(); return; }
         if (offlineReader != null) { showOfflineShelf(); return; }
         if (offlineScreen != null) { closeOfflineScreen(); return; }
         if (mainFrameFailed) { super.onBackPressed(); return; }
@@ -519,17 +691,28 @@ public class MainActivity extends Activity {
         super.onSaveInstanceState(state);
     }
     @Override protected void onPause() {
+        resumed = false;
+        updateScreenAwake();
         if (web != null) {
             try {
-                web.evaluateJavascript("window.dispatchEvent(new Event('pagehide'));document.querySelectorAll('audio').forEach(a=>a.pause());", null);
+                web.evaluateJavascript("window.dispatchEvent(new Event('pagehide'));document.querySelectorAll('audio,video').forEach(a=>a.pause());", null);
                 web.onPause();
             } catch (RuntimeException error) { Log.w(TAG, "Could not pause WebView", error); }
         }
         super.onPause();
     }
-    @Override protected void onResume() { super.onResume(); if (web != null) web.onResume(); }
+    @Override protected void onResume() {
+        super.onResume(); resumed = true;
+        if (web != null) {
+            web.onResume();
+            try { web.evaluateJavascript("window.dispatchEvent(new Event('pageshow'));", null); }
+            catch (RuntimeException ignored) { }
+        }
+        updateScreenAwake();
+    }
     @Override protected void onDestroy() {
         accountGeneration++;
+        closeCustomVideo();
         closeOfflineScreen();
         downloads.shutdownNow();
         destroyWebView();

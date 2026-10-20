@@ -1,6 +1,6 @@
 # Android «Мои книги»
 
-Текущая версия **1.4 / 5**, пакет **ru.portal.books**, Android 8.0+. APK для телефона и планшета: [PortalBooks-1.4-rustore.apk](../android/releases/PortalBooks-1.4-rustore.apk). Подписан постоянным ключом первой публикации.
+Текущая версия **1.5 / 6**, пакет **ru.portal.books**, Android 8.0+. APK для телефона и планшета: [PortalBooks-1.5-rustore.apk](../android/releases/PortalBooks-1.5-rustore.apk). Подписан постоянным ключом первой публикации.
 
 ## Установка
 
@@ -30,6 +30,8 @@ Android «Назад» возвращает из офлайн-книги к за
 
 ## Сборка
 
+Версия 1.5 исправляет масштабирование и дублирование разворотов в старых WebView. В нативном меню есть «Видео»: сборка и просмотр MP4, сохранение через системный выбор файла. При чтении, включая офлайн PDF и видео, экран остаётся включённым; сворачивание снимает удержание. [Видео и серверная очередь](VIDEO.md).
+
 Нужны JDK 17 или совместимая JDK Android Studio, SDK Platform 35, Build-Tools 35.0.0. Wrapper 8.11.1 и AGP 8.9.1 включены.
 
 Для магазина из Portal:
@@ -55,7 +57,7 @@ Android «Назад» возвращает из офлайн-книги к за
 Если установка не завершилась или «Открыть» неактивна, сохраните сообщение, модель и версию Android. Проверка SDK:
 
 ~~~powershell
-adb install -r android/releases/PortalBooks-1.4-rustore.apk
+adb install -r android/releases/PortalBooks-1.5-rustore.apk
 adb shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p ru.portal.books
 adb shell am start -W -n ru.portal.books/.MainActivity
 adb logcat -b crash -d
