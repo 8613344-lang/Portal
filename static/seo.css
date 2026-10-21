@@ -1,0 +1,23 @@
+.story-service{max-width:1120px;margin:auto;padding-top:36px;padding-bottom:60px;overflow-wrap:anywhere}
+.story-breadcrumbs{display:flex;flex-wrap:wrap;gap:8px;font-size:12px;line-height:1.6;margin-bottom:30px;color:#647568}
+.story-breadcrumbs a{color:#345846;text-decoration:underline;text-underline-offset:3px}
+.story-service-heading{max-width:820px;margin-bottom:48px}
+.story-service h1{font-size:clamp(30px,4vw,52px);line-height:1.16;letter-spacing:-1px;margin:12px 0 20px}
+.story-service h2,.story-intro h2{font-size:26px;line-height:1.3;margin-bottom:16px}
+.story-service h3,.story-intro h3{font-size:21px;margin-bottom:16px}
+.story-service p,.story-intro p,.story-service li{font-size:16px;line-height:1.8;margin-bottom:16px;color:#536255}
+.story-service .button{margin:8px 14px 8px 0}
+.story-info-grid,.story-intro{display:grid;grid-template-columns:1fr 1fr;gap:34px 48px}
+.story-intro{padding-top:48px;padding-bottom:48px;max-width:1120px;margin:auto}
+.story-info-grid ol{padding-left:22px}
+.story-faq{margin:48px 0}
+.story-faq details{border-bottom:1px solid #d9dfd1;padding:18px 0}
+.story-faq summary{cursor:pointer;font-weight:600;line-height:1.6;color:#304b40}
+.story-faq details p{margin:14px 0 0;max-width:850px}
+.story-service-cta{background:#f1e8d0;border-radius:24px;padding:32px;margin-top:36px}
+.public-story-hero{display:flex;gap:42px;align-items:center}
+.public-story-hero>div{flex:1;min-width:0}
+.public-story-cover{width:35%;max-width:320px;height:auto;max-height:450px;object-fit:contain;border-radius:14px;background:#efe9d8}
+.public-story-excerpt{margin:42px 0;padding:28px;border-left:4px solid #c6a759;background:#fffaf0;border-radius:0 18px 18px 0}
+.public-story-excerpt blockquote{line-height:1.9;font-size:18px;color:#304b40}
+@media(max-width:760px){.story-service{padding-top:24px}.story-info-grid,.story-intro{grid-template-columns:1fr;gap:22px}.story-service h1{font-size:31px}.story-service h2,.story-intro h2{font-size:23px}.story-service p,.story-intro p,.story-service li{font-size:15px}.public-story-hero{flex-direction:column;align-items:flex-start;gap:22px}.public-story-cover{width:65%;max-height:350px;align-self:center}.story-service-cta{padding:24px}.story-breadcrumbs{font-size:11px}.story-service-heading{margin-bottom:30px}}

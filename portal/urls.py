@@ -4,8 +4,15 @@ from django.urls import path
 from library import views
 from library import app_views, account_views, video_views
 from library.authentication import EmailAuthenticationForm
+from library import seo
 
 urlpatterns = [
+    path('robots.txt', seo.robots, name='robots'),
+    path('sitemap.xml', seo.sitemap, name='sitemap'),
+    path('sitemap-pages.xml', seo.sitemap_pages, name='sitemap-pages'),
+    path('sitemap-books-<int:page>.xml', seo.sitemap_books, name='sitemap-books'),
+    path('personalnaya-kniga/', seo.book_service, name='book-service'),
+    path('stories/<slug:slug>/', seo.book_detail, name='book-detail'),
     path('yandex_09163709ffc9d3bb.html', views.yandex_verification, name='yandex-verification'),
     path('accounts/confirm/start/', account_views.confirmation_start, name='email-start'),
     path('accounts/captcha/', account_views.captcha, name='captcha'),

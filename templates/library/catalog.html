@@ -1,12 +1,12 @@
 {% extends 'base.html' %}
-{% block title %}Истории наших читателей · Книги рядом{% endblock %}
+{% block title %}{{ seo.title }}{% endblock %}
 {% block content %}
 <section class="section page-section library-page">
   <div class="catalog-intro">
     <div class="catalog-intro-copy">
       <p class="eyebrow">МАЛЕНЬКИЕ ЧИТАТЕЛИ. БОЛЬШИЕ МИРЫ.</p>
       <h1 class="page-title">Истории наших читателей<span class="heading-spark" aria-hidden="true">✦</span></h1>
-      <p class="catalog-lead">Устройтесь поудобнее — начинается сказка.</p>
+      <p class="catalog-lead">Примеры персональных детских книг: знакомые мечты, любимые герои и маленькие приключения.</p>
       <p class="muted">Открытые книги для знакомства. Ваши персональные истории — в <a href="{% url 'account' %}">личном кабинете</a>.</p>
       <a class="button secondary catalog-shelf-link" href="{% url 'web-shelf' %}">Книжная полка — как в приложении <span aria-hidden="true">↗</span></a>
     </div>

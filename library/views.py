@@ -15,6 +15,7 @@ from .models import Book, BookPage, Notification, NotificationRecipient, Order
 from .models import UserAgreement, HomepagePromotion, AudioPreview
 from .sheets import book_sheets, ending_qrs, reader_spread
 from django.urls import reverse
+from .seo import home_metadata, set_metadata
 
 
 @require_http_methods(['GET', 'HEAD'])
@@ -24,6 +25,7 @@ def yandex_verification(request):
 
 
 def home(request):
+    home_metadata(request)
     public_books = Book.objects.filter(status='published', visibility='public')
     configured = {preview.position: preview for preview in AudioPreview.objects.all()}
     audio_previews = []
@@ -47,7 +49,15 @@ def catalog(request):
     books = Book.objects.filter(status='published', visibility='public')
     if query:
         books = books.filter(Q(title__icontains=query) | Q(description__icontains=query))
-    return render(request, 'library/catalog.html', {'page_obj': Paginator(books, 18).get_page(request.GET.get('page')), 'query': query})
+    page = Paginator(books, 18).get_page(request.GET.get('page'))
+    suffix = f' — страница {page.number}' if page.number > 1 else ''
+    path = reverse('catalog') + (f'?page={page.number}' if page.number > 1 else '')
+    valid_page = request.GET.get('page') in (None, str(page.number))
+    set_metadata(request, 'Истории наших читателей — примеры персональных книг'+suffix+' | Книги рядом',
+        'Примеры именных детских книг: истории, иллюстрации и приключения. '
+        'Полистайте публичные книги и выберите идею для сказки о вашем ребёнке.'+suffix, path,
+        indexable='q' not in request.GET and valid_page)
+    return render(request, 'library/catalog.html', {'page_obj': page, 'query': query})
 
 @login_required
 @never_cache
@@ -161,6 +171,9 @@ def sheet_audio(request, slug, kind):
 @never_cache
 @require_http_methods(['GET', 'POST'])
 def order_create(request):
+    set_metadata(request, 'Заказать персональную книгу для ребёнка — Книги рядом',
+        'Оставьте заявку на именную сказку: расскажите о ребёнке, событии и пожеланиях. '
+        'Фото необязательно. Обсудим историю, иллюстрации, озвучку и стоимость.', reverse('order'))
     tokens = request.session.get('order_tokens', [])
     if request.method == 'POST':
         token = request.POST.get('submission_key', '')
