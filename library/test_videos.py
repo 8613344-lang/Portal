@@ -4,7 +4,7 @@ import wave
 from datetime import timedelta
 from pathlib import Path
 from unittest.mock import patch
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Permission, User
 from django.core.files.base import ContentFile
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
@@ -29,6 +29,7 @@ class VideoTests(TestCase):
         self.draft = Book.objects.create(title='Черновик', slug='video-draft', visibility='public')
         self.user = User.objects.create_user('video-user')
         self.other = User.objects.create_user('other-video-user')
+        self.admin = User.objects.create_superuser('video-admin', 'video-admin@example.com', 'test-password')
         self.grant = BookAccess.objects.create(book=self.private, user=self.user)
 
     def url(self, name, book=None):
@@ -57,6 +58,7 @@ class VideoTests(TestCase):
         strict = Client(enforce_csrf_checks=True)
         self.assertEqual(strict.get(self.url('book-video-create')).status_code, 405)
         self.assertEqual(strict.post(self.url('book-video-create'), {'delay':3}).status_code, 403)
+        strict.force_login(self.admin)
         strict.get(self.url('book-video'))
         token = strict.cookies['csrftoken'].value
         data = {'delay':3, 'csrfmiddlewaretoken':token}
@@ -65,8 +67,78 @@ class VideoTests(TestCase):
         self.assertEqual(strict.post(self.url('book-video-create'), data).status_code, 202)
         self.assertEqual(BookVideo.objects.count(), 1)
         self.assertEqual(BookVideo.objects.get().pk, original.pk)
+        self.client.force_login(self.admin)
         for value in ('2', '301', 'bad'):
             self.assertEqual(self.client.post(self.url('book-video-create'), {'delay':value}).status_code, 400)
+
+    def test_public_video_creation_requires_staff_and_book_change_permission(self):
+        staff = User.objects.create_user('video-staff', is_staff=True)
+        nonstaff_editor = User.objects.create_user('video-nonstaff-editor')
+        nonstaff_editor.user_permissions.add(Permission.objects.get(codename='change_book'))
+        BookAccess.objects.create(book=self.public, user=self.user)
+        for account in (None, self.user, staff, nonstaff_editor):
+            client = Client()
+            if account:
+                client.force_login(account)
+            with self.subTest(account=account), patch('library.video_views.queue_video') as queue:
+                for query in ({}, {'app':1, 'device':'tablet'}):
+                    response = client.get(self.url('book-video'), query)
+                    self.assertEqual(response.status_code, 200)
+                    self.assertNotContains(response, 'video-create')
+                    self.assertNotContains(response, 'name="delay"')
+                    self.assertContains(response, '← Читать книгу')
+                    self.assertContains(response, 'data-pdf-url="/books/video-public/download/pdf/"')
+                response = client.post(self.url('book-video-create'), {'delay':3})
+                self.assertEqual(response.status_code, 403)
+                queue.assert_not_called()
+                self.assertFalse(BookVideo.objects.filter(book=self.public).exists())
+
+    def test_readers_cannot_rebuild_or_change_delay_of_public_video(self):
+        self.mark_ready()
+        original = BookVideo.objects.filter(book=self.public).values().get()
+        for account in (None, self.user):
+            client = Client()
+            if account:
+                client.force_login(account)
+            with self.subTest(account=account):
+                self.assertEqual(client.post(self.url('book-video-create'), {'delay':300}).status_code, 403)
+                self.assertEqual(BookVideo.objects.filter(book=self.public).values().get(), original)
+                self.assertEqual(client.get(self.url('book-video-status')).json()['state'], 'ready')
+                self.assertContains(client.get(self.url('book-video')), 'Скачать MP4')
+                response = client.get(self.url('book-video-file'), HTTP_RANGE='bytes=0-11')
+                self.assertEqual(response.status_code, 206)
+                self.assertEqual(b''.join(response.streaming_content)[4:8], b'ftyp')
+
+    def test_shared_links_do_not_grant_public_video_creation(self):
+        for route, token in (('shared-reader', self.public.share_token),
+                             ('shared-video', self.public.video_share_token)):
+            client = Client()
+            with self.subTest(route=route), patch('library.video_views.queue_video') as queue:
+                self.assertEqual(client.get(reverse(route, args=[token])).status_code, 200)
+                self.assertEqual(client.post(self.url('book-video-create'), {'delay':3}).status_code, 403)
+                queue.assert_not_called()
+        self.assertFalse(BookVideo.objects.exists())
+
+    def test_administrators_can_create_and_rebuild_public_video(self):
+        editor = User.objects.create_user('video-editor', is_staff=True)
+        editor.user_permissions.add(Permission.objects.get(codename='change_book'))
+        for account in (self.admin, editor):
+            self.client.force_login(account)
+            with self.subTest(account=account):
+                self.assertContains(self.client.get(self.url('book-video'), {'app':1}), 'video-create')
+                self.assertEqual(self.client.post(self.url('book-video-create'), {'delay':3}).status_code, 202)
+                self.mark_ready()
+                self.assertEqual(self.client.post(self.url('book-video-create'), {'delay':4}).status_code, 202)
+                job = BookVideo.objects.get(book=self.public)
+                self.assertEqual(job.delay, 4)
+                self.assertEqual(job.state, 'queued')
+
+    def test_assigned_private_book_reader_can_still_create_video(self):
+        self.client.force_login(self.user)
+        response = self.client.get(self.url('book-video', self.private))
+        self.assertContains(response, 'video-create')
+        self.assertEqual(self.client.post(self.url('book-video-create', self.private), {'delay':3}).status_code, 202)
+        self.assertTrue(BookVideo.objects.filter(book=self.private, state='queued').exists())
 
     def test_ranges_head_download_and_stale_cache(self):
         job = self.mark_ready()
@@ -81,6 +153,7 @@ class VideoTests(TestCase):
         self.public.save()
         self.assertEqual(self.client.get(self.url('book-video-status')).json()['state'], 'stale')
         self.assertEqual(self.client.get(self.url('book-video-file')).status_code, 404)
+        self.client.force_login(self.admin)
         self.assertEqual(self.client.post(self.url('book-video-create'), {'delay':3}).status_code, 202)
         job.refresh_from_db()
         self.assertEqual(job.state, 'queued')
@@ -148,6 +221,7 @@ class VideoTests(TestCase):
         self.assertGreater(frames, 60)
         self.assertTrue(3.0 < seconds < 4.0, seconds)
         name = job.file.name
+        self.client.force_login(self.admin)
         with patch('library.videos.render_mp4') as renderer:
             response = self.client.post(self.url('book-video-create'), {'delay':3})
             self.assertEqual(response.status_code, 200)

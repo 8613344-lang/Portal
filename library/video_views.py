@@ -13,6 +13,13 @@ def can_watch_video(request, book):
     return token == str(book.video_share_token) or can_read_book(request, book)
 
 
+def can_create_video(request, book):
+    if book.visibility == 'public':
+        return request.user.is_staff and request.user.has_perm('library.change_book')
+    from .views import can_read_book
+    return can_read_book(request, book)
+
+
 @never_cache
 @require_GET
 def shared_video(request, token):
@@ -48,7 +55,8 @@ def watch(request, slug):
     request.visit_book, request.visit_kind = book, 'video'
     app = request.GET.get('app') == '1'
     response = render(request, 'library/video.html', {'book': book, 'video': payload(book), 'app_mode': app,
-        'can_manage_video': can_read_book(request, book),
+        'can_read_source': can_read_book(request, book),
+        'can_manage_video': can_create_video(request, book),
         'device': 'tablet' if request.GET.get('device') == 'tablet' else 'phone',
         'base_template': 'app_base.html' if app else 'base.html'})
     response['Referrer-Policy'] = 'same-origin'
@@ -64,9 +72,11 @@ def status(request, slug):
 @never_cache
 @require_POST
 def create(request, slug):
-    from .views import can_read_book
     book = allowed_book(request, slug)
-    if not can_read_book(request, book): raise Http404
+    if not can_create_video(request, book):
+        if book.visibility == 'public':
+            return HttpResponse('Создавать видео публичных книг может только администратор.', status=403)
+        raise Http404
     try:
         delay = int(request.POST.get('delay', '15'))
         if not 3 <= delay <= 300: raise ValueError
