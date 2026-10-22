@@ -1,0 +1,42 @@
+{% extends 'base.html' %}{% load static %}
+{% block title %}Добавить сайт на экран телефона · Книги рядом{% endblock %}
+{% block content %}
+<section class="install-page" data-install-page>
+  <div class="install-intro">
+    <div class="install-app-icon"><img src="{% static 'pwa/icon-192.png' %}" alt="" width="88" height="88"><span aria-hidden="true">✦</span></div>
+    <p class="eyebrow">ЛЮБИМЫЕ КНИГИ РЯДОМ</p>
+    <h1>Ваши истории —<br>в одном касании</h1>
+    <p>Добавьте «Книги рядом» на главный экран телефона или планшета. Ярлык сразу откроет книжную полку: сначала персональные книги, затем публичные.</p>
+    <button type="button" class="button primary" data-install-action hidden>Добавить на экран</button>
+    <p class="install-status" data-install-status role="status"></p>
+    <div class="install-benefits"><span>Без магазина приложений</span><span>Для телефона и планшета</span></div>
+  </div>
+  <div class="install-guide-card">
+    <h2>Как добавить ярлык</h2>
+    <div class="install-platforms" data-install-platforms hidden aria-label="Ваше устройство">
+      <button type="button" data-platform-option="ios" aria-pressed="false">iPhone / iPad</button>
+      <button type="button" data-platform-option="android" aria-pressed="false">Android</button>
+    </div>
+    <section data-install-guide="ios" aria-labelledby="ios-guide-title">
+      <h3 id="ios-guide-title">На iPhone и iPad</h3>
+      <ol class="install-steps">
+        <li><div><strong>Откройте сайт в Safari</strong><p>Если вы перешли из Telegram, почты или другого приложения, откройте меню и выберите «Открыть в Safari».</p></div></li>
+        <li><div><strong>Нажмите «Поделиться» <svg viewBox="0 0 24 24" aria-label="Квадрат со стрелкой вверх" role="img"><path d="M8 9H4v12h16V9h-4M12 16V2m-4 4 4-4 4 4"/></svg></strong><p>Кнопка находится на панели Safari. Её положение зависит от версии системы.</p></div></li>
+        <li><div><strong>Выберите «На экран Домой»</strong><p>Прокрутите список действий. Если пункта нет, проверьте «Изменить действия». Если есть переключатель «Открывать как веб-приложение», включите его.</p></div></li>
+        <li><div><strong>Подтвердите «Добавить»</strong><p>На главном экране появится значок с книгой. На каждом устройстве ярлык добавляется отдельно.</p></div></li>
+      </ol>
+    </section>
+    <section data-install-guide="android" aria-labelledby="android-guide-title">
+      <h3 id="android-guide-title">На телефоне и планшете Android</h3>
+      <ol class="install-steps">
+        <li><div><strong>Откройте сайт в браузере</strong><p>Например, в Chrome. Из Telegram или другого приложения выберите в меню «Открыть в браузере».</p></div></li>
+        <li><div><strong>Нажмите «Добавить на экран»</strong><p>Если кнопка установки появилась на этой странице, нажмите её и подтвердите действие в окне браузера.</p></div></li>
+        <li><div><strong>Или используйте меню браузера ⋮</strong><p>Выберите «Установить приложение» или «Добавить на главный экран». Название пункта зависит от браузера.</p></div></li>
+        <li><div><strong>Подтвердите добавление</strong><p>Ярлык появится на главном экране. Если система предлагает перетащить значок, поместите его в удобное место.</p></div></li>
+      </ol>
+    </section>
+    <a class="install-shelf-link" href="{% url 'web-shelf' %}">Открыть книжную полку <span aria-hidden="true">→</span></a>
+  </div>
+  <aside class="install-note"><strong>Книги открываются через интернет</strong><p>Ярлык ведёт на тот же сайт и использует те же права доступа. Если личные книги не появились, войдите в свой аккаунт. Для чтения без сети заранее сохраните PDF. Установка ярлыка не скачивает книги на устройство.</p></aside>
+</section>
+{% endblock %}

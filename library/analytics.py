@@ -16,7 +16,7 @@ from .models import PageVisit
 logger = logging.getLogger(__name__)
 PAGE_ROUTES = {'home', 'catalog', 'book-service', 'book-detail', 'order', 'order-success',
                'privacy', 'web-shelf', 'app-shelf', 'account', 'profile', 'login', 'app-login',
-               'register', 'email-start'}
+               'register', 'email-start', 'install'}
 
 
 def client_ip(request):

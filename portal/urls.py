@@ -2,12 +2,16 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import path
 from library import views
-from library import app_views, account_views, video_views
+from library import app_views, account_views, video_views, pwa
 from library.authentication import EmailAuthenticationForm
 from library import seo
 from library.images import web_image
 
 urlpatterns = [
+    path('manifest.webmanifest', pwa.manifest, name='web-manifest'),
+    path('service-worker.js', pwa.service_worker, name='service-worker'),
+    path('install/', pwa.install, name='install'),
+    path('offline/', pwa.offline, name='offline'),
     path('web-image/<int:width>/<path:path>', web_image, name='web-image'),
     path('robots.txt', seo.robots, name='robots'),
     path('sitemap.xml', seo.sitemap, name='sitemap'),

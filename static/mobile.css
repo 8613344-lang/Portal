@@ -1,0 +1,46 @@
+/* Mobile web shell; immersive reading keeps its own controls. */
+.mobile-nav{display:none}
+.website .footer-links{flex-wrap:wrap;gap:12px 18px;min-width:0}
+.website .story-intro>div{min-width:0}.website .story-intro .text-link{white-space:normal}
+.install-offer[hidden],.install-page [hidden]{display:none!important}
+.install-offer{max-width:920px;margin:18px auto 0;padding:16px 18px;display:flex;align-items:center;gap:14px;border:1px solid #dfe6dc;border-radius:18px;background:#f1f4eb;color:#2b3f43}
+.install-offer>img{border-radius:12px;flex-shrink:0}.install-offer>div{min-width:0;flex:1}
+.install-offer strong{font-size:14px}.install-offer p{font-size:12px;color:#626d6d}
+.install-offer a{display:inline-flex;align-items:center;gap:10px;font-size:13px;font-weight:650;min-height:44px;text-decoration:underline;text-underline-offset:4px}
+.install-offer button{align-self:flex-start;flex-shrink:0;width:44px;height:44px;border:0;border-radius:12px;background:transparent;color:#626d6d;font-size:26px}
+.install-page{max-width:1160px;margin:auto;padding:60px 32px;display:grid;grid-template-columns:.9fr 1.1fr;gap:36px 64px;align-items:start}
+.install-intro{padding-top:16px}.install-app-icon{position:relative;display:inline-flex;margin-bottom:28px}.install-app-icon img{border-radius:23px;box-shadow:0 10px 24px #20483e20}.install-app-icon>span{position:absolute;right:-18px;top:-16px;color:#b59046;font-size:35px}
+.install-intro .eyebrow{margin-bottom:16px}.website .install-intro h1{font-size:clamp(34px,4vw,52px);line-height:1.12;letter-spacing:-1.8px}
+.install-intro>p:not(.eyebrow){font-size:16px;line-height:1.8;margin-top:22px;color:#626d6d}.install-intro .button{margin-top:24px}
+.install-intro .install-status:empty{display:none}.install-intro .install-status{font-size:14px;color:#3f6250}
+.install-benefits{display:flex;gap:10px;flex-wrap:wrap;margin-top:24px}.install-benefits span{font-size:11px;border:1px solid #dfe5dc;border-radius:20px;padding:6px 12px;background:#f3f4ec}
+.install-guide-card{padding:30px;border:1px solid #e5e3d8;background:#fffdf9;border-radius:24px}.website .install-guide-card h2{font-size:25px;letter-spacing:-.8px}
+.install-platforms{display:flex;background:#f0ece4;border-radius:14px;padding:5px;gap:5px;margin:22px 0}.install-platforms button{flex:1;min-height:44px;border:0;border-radius:10px;padding:8px 12px;font-size:14px;color:#626d6d;background:transparent}.install-platforms button[aria-pressed=true]{background:#fffdf9;color:#2b3f43;box-shadow:0 2px 8px #27372c0e;font-weight:650}
+.website .install-guide-card h3{font-size:17px;line-height:1.5;letter-spacing:-.3px;margin:22px 0 16px}
+.install-steps{counter-reset:install;padding:0;list-style:none;margin:0}.install-steps li{counter-increment:install;display:flex;gap:14px;margin-top:22px}.install-steps li:before{content:counter(install);display:grid;place-items:center;border-radius:12px;background:#e9eef0;color:#4e6a72;flex:0 0 34px;height:34px;font-weight:650;font-size:14px}
+.install-steps strong{font-size:15px}.install-steps p{margin-top:5px;font-size:13px;line-height:1.8;color:#626d6d}.install-steps svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;vertical-align:middle;margin-left:4px}
+.install-shelf-link{display:flex;justify-content:space-between;align-items:center;min-height:48px;border-top:1px solid #e5e3d8;margin-top:26px;padding-top:16px;font-size:14px;font-weight:600}
+.install-note{grid-column:1/-1;border-radius:18px;padding:22px 26px;background:#ece7f3;line-height:1.8}.install-note strong{font-size:15px}.install-note p{font-size:13px;color:#655e70;margin-top:6px}
+body.book-focus .mobile-nav,body.book-focus .install-offer{display:none!important}
+body.book-focus .focus-controls{bottom:max(8px,env(safe-area-inset-bottom,0px))}
+@media(max-width:1100px), (max-width:1366px) and (pointer:coarse){
+  body.website{padding-bottom:calc(76px + env(safe-area-inset-bottom,0px))}
+  body.website.book-focus{padding-bottom:0}
+  .website .mobile-nav{position:fixed;z-index:25;bottom:0;left:0;right:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:7px max(12px,env(safe-area-inset-right,0px)) calc(7px + env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px));border-top:1px solid #e4e2d8;background:#fffdf9f5;backdrop-filter:blur(12px);font-size:11px}
+  .mobile-nav a{min-height:54px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border-radius:12px;color:#626d6d}.mobile-nav a[aria-current=page]{color:#365847;background:#edf0e3}.mobile-nav svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round}
+  .install-offer{margin:16px 24px 0}
+  .website input:not([type=checkbox]):not([type=hidden]),.website textarea,.website select{font-size:16px;min-height:46px}
+  .website input[type=checkbox]{width:18px;height:18px}
+  .website .menu-toggle,.website .site-header nav>a,.website .nav-button{min-height:44px}.website .site-header nav>a{display:inline-flex;align-items:center}
+  .website .button{min-height:46px}.website .pagination a{min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center}
+  .install-page{padding:36px 24px;gap:28px}.install-guide-card{padding:24px}.install-intro>p:not(.eyebrow){font-size:15px}
+}
+@media(min-width:601px) and (max-width:1000px){.website .home-samples .book-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){
+  .install-offer{margin:14px 16px 0;padding:12px;gap:10px}.install-offer>img{width:42px;height:42px}.install-offer button{margin:-5px -6px 0 0}.install-offer p{font-size:12px;line-height:1.6}
+  .install-page{grid-template-columns:1fr;padding:30px 18px;gap:26px}.install-intro{padding:0}.install-app-icon{margin-bottom:22px}.install-app-icon img{width:70px;height:70px;border-radius:19px}.website .install-intro h1{font-size:38px;letter-spacing:-1.5px}.install-intro>p:not(.eyebrow){margin-top:18px;font-size:15px}.install-benefits{margin-top:18px}.install-guide-card{padding:23px 20px;border-radius:20px}.install-note{padding:20px}.install-steps li{gap:12px}.install-steps p{font-size:14px}
+  .website .section-heading{flex-wrap:wrap}.website .page-title{font-size:36px;overflow-wrap:anywhere}.website .order-row{flex-wrap:wrap}.website .order-row>div{min-width:0}
+  .website .auth-card{width:calc(100% - 32px)}
+}
+@media(max-width:380px){.website .site-header{padding:16px;gap:8px}.website .site-header .brand{font-size:19px;gap:8px}.website .site-header .brand small{font-size:7px}.website .site-header .brand-mark{width:28px}.website .menu-toggle{padding:5px 10px}.install-offer strong{font-size:13px}.install-offer p{font-size:11px}}
+@media(display-mode:standalone){.website .site-header{padding-top:max(18px,env(safe-area-inset-top,0px))}}

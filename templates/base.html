@@ -1,11 +1,17 @@
 {% load static %}<!doctype html>
 <html lang="ru">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>{% block title %}{{ seo.title }}{% endblock %}</title>
   {% include 'library/seo_head.html' %}
   <meta name="theme-color" content="#fbf7ee">
   <link rel="icon" href="{% static 'favicon.svg' %}" type="image/svg+xml">
+  <link rel="manifest" href="{% url 'web-manifest' %}">
+  <link rel="apple-touch-icon" sizes="180x180" href="{% static 'pwa/apple-touch-icon.png' %}">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Книги рядом">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="stylesheet" href="{% static 'style.css' %}">
   <link rel="stylesheet" href="{% static 'site.css' %}">
   <link rel="stylesheet" href="{% static 'library-design.css' %}">
@@ -14,6 +20,8 @@
   <link rel="stylesheet" href="{% static 'seo.css' %}">
   {% block extra_head %}{% endblock %}
   <link rel="stylesheet" href="{% static 'reader-layout.css' %}">
+  <link rel="stylesheet" href="{% static 'mobile.css' %}">
+  <script src="{% static 'pwa.js' %}" defer></script>
   <script src="{% static 'screen-awake.js' %}" defer></script>
   <script src="{% static 'reader.js' %}" defer></script>
   <script src="{% static 'book-video.js' %}" defer></script>
@@ -41,10 +49,11 @@
   </nav>
 </header>
 {% if messages %}<div class="messages" aria-live="polite">{% for message in messages %}<p class="message {{ message.tags }}">{{ message }}</p>{% endfor %}</div>{% endif %}
+{% include 'pwa/mobile_ui.html' %}
 <main id="main-content">{% block content %}{% endblock %}</main>
 <footer class="site-footer">
   <div><a class="brand" href="{% url 'home' %}">Книги рядом<span class="brand-dot">.</span></a><p>Маленькие истории о самом важном.</p></div>
-  <div class="footer-links"><a href="{% url 'catalog' %}">Истории наших читателей</a><a href="{% url 'book-service' %}">Персональная книга для ребёнка</a><a href="{% url 'web-shelf' %}">Книжная полка</a><a href="{% url 'order' %}">Создать книгу</a><a href="{% url 'privacy' %}">Пользовательское соглашение</a></div>
+  <div class="footer-links"><a href="{% url 'catalog' %}">Истории наших читателей</a><a href="{% url 'book-service' %}">Персональная книга для ребёнка</a><a href="{% url 'web-shelf' %}">Книжная полка</a><a href="{% url 'install' %}">Добавить на экран</a><a href="{% url 'order' %}">Создать книгу</a><a href="{% url 'privacy' %}">Пользовательское соглашение</a></div>
   <span>С теплом к вашему детству<br>© {% now 'Y' %} Книги рядом</span>
 </footer>
 </body></html>
