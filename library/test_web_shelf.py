@@ -105,7 +105,8 @@ class WebShelfTests(TestCase):
     def test_cover_fallback_and_original_android_mode(self):
         page = BookPage.objects.create(book=self.public, position=1, title='Начало', illustration='bookpage/test-cover.jpg')
         response = self.client.get(reverse('web-shelf'))
-        self.assertEqual(response.context['public_books'][0].app_cover, page.illustration.url)
+        from .images import image_url
+        self.assertEqual(response.context['public_books'][0].app_cover, image_url(page.illustration, 640))
         response = self.client.get(reverse('app-shelf'), {'device': 'tablet'})
         self.assertTemplateUsed(response, 'app_base.html')
         self.assertEqual(response.context['device'], 'tablet')

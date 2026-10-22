@@ -5,8 +5,10 @@ from library import views
 from library import app_views, account_views, video_views
 from library.authentication import EmailAuthenticationForm
 from library import seo
+from library.images import web_image
 
 urlpatterns = [
+    path('web-image/<int:width>/<path:path>', web_image, name='web-image'),
     path('robots.txt', seo.robots, name='robots'),
     path('sitemap.xml', seo.sitemap, name='sitemap'),
     path('sitemap-pages.xml', seo.sitemap_pages, name='sitemap-pages'),

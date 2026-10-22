@@ -1,8 +1,9 @@
+{% load web_images %}
 <article class="book-card">
   <a class="card-cover" href="{% url 'reader' book.slug %}" aria-label="Открыть книгу «{{ book.title }}»">
     <div class="book-card-visual">
-      {% if book.cover %}<img src="{{ book.cover.url }}" alt="Обложка: {{ book.title }}" loading="lazy">
-      {% elif book.cover_page.illustration %}<img src="{{ book.cover_page.illustration.url }}" alt="Обложка: {{ book.title }}" loading="lazy">
+      {% if book.cover %}<img src="{% web_image book.cover 640 %}" srcset="{% web_image book.cover 320 %} 320w, {% web_image book.cover 640 %} 640w" sizes="(max-width: 700px) 90vw, 360px" decoding="async" alt="Обложка: {{ book.title }}" loading="lazy">
+      {% elif book.cover_page.illustration %}<img src="{% web_image book.cover_page.illustration 640 %}" srcset="{% web_image book.cover_page.illustration 320 %} 320w, {% web_image book.cover_page.illustration 640 %} 640w" sizes="(max-width: 700px) 90vw, 360px" decoding="async" alt="Обложка: {{ book.title }}" loading="lazy">
       {% else %}<div class="cover-placeholder"><span aria-hidden="true">✦</span><strong>{{ book.title }}</strong><small>КНИГИ РЯДОМ</small></div>{% endif %}
     </div>
     <span class="card-open">Открыть книгу <span aria-hidden="true">↗</span></span>

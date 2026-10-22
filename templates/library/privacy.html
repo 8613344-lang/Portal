@@ -7,5 +7,6 @@
   <h1 class="page-title">{{ agreement.title }}</h1>
   {% if agreement.updated_at %}<p class="muted legal-updated">Обновлено: <time datetime="{{ agreement.updated_at|date:'c' }}">{{ agreement.updated_at|date:'d.m.Y' }}</time></p>{% endif %}
   <div class="legal-body">{{ agreement.content|linebreaks }}</div>
+  {% if analytics_enabled %}<section class="legal-body"><h2>Техническая статистика сайта</h2><p>Для статистики посещений сохраняются время и адрес открытой страницы, IP, сведения о браузере и устройстве, домен источника перехода и пользователь, если выполнен вход. Для книг также фиксируются открытие и переходы между страницами. Пароли, содержимое форм и секретные ссылки доступа в статистику не записываются. Статистика доступна только уполномоченным сотрудникам; срок хранения — {{ analytics_retention_days }} дней. Отдельные аналитические cookies и сторонние счётчики не используются.</p></section>{% endif %}
 </article>
 {% endblock %}

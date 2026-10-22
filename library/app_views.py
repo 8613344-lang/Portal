@@ -4,7 +4,7 @@ from django.contrib.auth import logout
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView
-from django.core.files.storage import default_storage
+from .images import image_url
 from django.core.paginator import Paginator
 from django.db.models import OuterRef, Subquery
 from django.db import transaction
@@ -49,7 +49,8 @@ def shelf_pages(request, count, reader_params):
         for book in page:
             image = book.cover_page.illustration if book.cover_page_id else book.cover
             name = image.name if image else book.first_image
-            book.app_cover = default_storage.url(name) if name else ''
+            book.app_cover = image_url(name, 640) if name else ''
+            book.app_cover_small = image_url(name, 320) if name else ''
             book.app_reader = reverse('reader', args=[book.slug]) + '?' + urlencode(reader_params)
     return mine, everyone
 

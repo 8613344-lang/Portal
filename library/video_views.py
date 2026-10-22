@@ -45,6 +45,7 @@ def payload(book):
 def watch(request, slug):
     from .views import can_read_book
     book = allowed_book(request, slug)
+    request.visit_book, request.visit_kind = book, 'video'
     app = request.GET.get('app') == '1'
     response = render(request, 'library/video.html', {'book': book, 'video': payload(book), 'app_mode': app,
         'can_manage_video': can_read_book(request, book),

@@ -13,6 +13,7 @@ from django.utils.html import strip_tags
 from django.views.decorators.http import require_safe
 
 from .models import Book
+from .images import image_url
 
 BRAND = 'Книги рядом'
 HOME_TITLE = 'Персональная книга для ребёнка на заказ — Книги рядом'
@@ -59,7 +60,7 @@ def set_metadata(request, title, description, path, *, indexable=True, image=Non
     request.search_metadata = {
         'title': title, 'description': clean_text(description), 'canonical': absolute(path),
         'indexable': indexable, 'robots': 'index, follow' if indexable else 'noindex, follow',
-        'image': absolute(image or static('images/storybook-hero.webp')),
+        'image': absolute(image or static('images/web/hero-1440.webp')),
         'structured_data': jsonld({'@context': 'https://schema.org', '@graph': graph}) if graph and indexable else '',
     }
 
@@ -120,9 +121,9 @@ def book_detail(request, slug):
     schema = {'@type': 'Book', 'name': book.title, 'description': clean_text(description, 500),
               'url': absolute(path), 'inLanguage': 'ru', 'bookFormat': 'https://schema.org/EBook',
               'publisher': {'@type': 'Organization', 'name': BRAND}}
-    if image: schema['image'] = absolute(image.url)
+    if image: schema['image'] = absolute(image_url(image, 1280))
     set_metadata(request, f'{book.title} — персональная детская книга | Книги рядом', description, path,
-        image=image.url if image else None, graph=[schema,
+        image=image_url(image, 1280) if image else None, graph=[schema,
             {'@type': 'BreadcrumbList', 'itemListElement': [
                 {'@type': 'ListItem', 'position': 1, 'name': BRAND, 'item': absolute('/')},
                 {'@type': 'ListItem', 'position': 2, 'name': 'Истории наших читателей', 'item': absolute(reverse('catalog'))},

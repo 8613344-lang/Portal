@@ -1,4 +1,4 @@
-{% extends base_template|default:'base.html' %}
+{% extends base_template|default:'base.html' %}{% load web_images %}
 {% block title %}{{ book.title }} · Книги рядом{% endblock %}
 {% block content %}
 <section class="reader-shell" data-book-reader data-pdf-url="{% url 'book-export' book.slug 'pdf' %}" data-video-url="{% url 'book-video' book.slug %}" data-account="{% if user.is_authenticated %}{{ user.pk }}{% else %}guest{% endif %}" data-app="{{ app_mode|yesno:'true,false' }}" data-device="{{ device }}" data-shelf-return="{{ shelf_return_url }}" data-autostart="{{ shared|yesno:'true,false' }}" data-number="{{ number }}" data-total="{{ total }}" data-focus-previous="{{ spread.previous }}" data-focus-next="{{ spread.next }}" data-focus-label="{{ spread.label }}">
@@ -33,28 +33,28 @@
     <aside class="contents"><p class="eyebrow">СОДЕРЖАНИЕ</p><ol>{% for page in pages %}<li><a class="{% if page.pk == current.pk %}active{% endif %}" href="{% querystring page=forloop.counter %}"><span>{{ forloop.counter|stringformat:'02d' }}</span>{{ page.title }}</a></li>{% endfor %}</ol></aside>
     <div class="reader-main">
       <div class="reading-sheet{% if spread.pages|length > 1 or spread.split_story %} has-spread{% endif %}">
-      <article class="reading-page background-{{ book.background_theme }}{% if current.illustration %} has-illustration{% endif %}{% if current.pdf_full_page %} pdf-leaf{% endif %}" style="--ending-panel:{{ book.ending_panel_css }};--ending-ink:{{ book.ending_text_color }};{% if current.kind == 'ending' %}color:{{ book.ending_text_color }};{% endif %}{% if book.background_theme == 'custom' and book.background_image %}background-image:url('{{ book.background_image.url }}'){% endif %}">
+      <article class="reading-page background-{{ book.background_theme }}{% if current.illustration %} has-illustration{% endif %}{% if current.pdf_full_page %} pdf-leaf{% endif %}" style="--ending-panel:{{ book.ending_panel_css }};--ending-ink:{{ book.ending_text_color }};{% if current.kind == 'ending' %}color:{{ book.ending_text_color }};{% endif %}{% if book.background_theme == 'custom' and book.background_image %}background-image:url('{% web_image book.background_image 1280 %}'){% endif %}">
         {% if current.pdf_full_page %}
           <h1 class="sr-only">{{ current.display_title|default:current.title }}</h1>
-          {% if current.illustration %}<img class="page-illustration" src="{{ current.illustration.url }}" alt="{{ current.title }}">{% endif %}
+          {% if current.illustration %}<img class="page-illustration" src="{% web_image current.illustration 960 %}" srcset="{% web_image current.illustration 640 %} 640w, {% web_image current.illustration 960 %} 960w, {% web_image current.illustration 1280 %} 1280w, {% web_image current.illustration 1920 %} 1920w" sizes="(max-width: 900px) 100vw, 900px" decoding="async" alt="{{ current.title }}">{% endif %}
           {% if current.kind == 'ending' %}{% if book.ending_show_text or ending_qrs %}<div class="sheet-overlay">
             {% include 'library/ending_content.html' %}
           </div>{% endif %}{% endif %}
         {% else %}
           <p class="eyebrow">{% if current.kind == 'cover' %}ОБЛОЖКА{% elif current.kind == 'ending' %}ПОСЛЕДНЯЯ СТРАНИЦА{% else %}СТРАНИЦА {{ number }} / {{ total }}{% endif %}</p>
           {% if current.kind != 'ending' %}<h1>{{ current.display_title|default:current.title }}</h1>{% endif %}
-          {% if current.illustration %}<img class="page-illustration" src="{{ current.illustration.url }}" alt="{{ current.title }}">{% endif %}
+          {% if current.illustration %}<img class="page-illustration" src="{% web_image current.illustration 960 %}" srcset="{% web_image current.illustration 640 %} 640w, {% web_image current.illustration 960 %} 960w, {% web_image current.illustration 1280 %} 1280w, {% web_image current.illustration 1920 %} 1920w" sizes="(max-width: 900px) 100vw, 900px" decoding="async" alt="{{ current.title }}">{% endif %}
           {% if current.kind != 'ending' %}<div class="story-text">{{ current.text|linebreaks }}</div>{% else %}{% include 'library/ending_content.html' %}{% endif %}
         {% endif %}
       </article>
       {% if spread.split_story or spread.pages|length > 1 %}
       <div class="focus-spread" aria-label="Разворот книги">
         {% if spread.split_story %}
-          <article class="spread-leaf spread-picture"><img src="{{ current.illustration.url }}" alt="{{ current.title }}"></article>
-          <article class="spread-leaf spread-text background-{{ book.background_theme }}"{% if book.background_theme == 'custom' and book.background_image %} style="background-image:url('{{ book.background_image.url }}')"{% endif %}><h1>{{ current.title }}</h1><div class="story-text">{{ current.text|linebreaks }}</div></article>
+          <article class="spread-leaf spread-picture"><img src="{% web_image current.illustration 960 %}" srcset="{% web_image current.illustration 640 %} 640w, {% web_image current.illustration 960 %} 960w, {% web_image current.illustration 1280 %} 1280w, {% web_image current.illustration 1920 %} 1920w" sizes="(max-width: 900px) 100vw, 900px" decoding="async" alt="{{ current.title }}"></article>
+          <article class="spread-leaf spread-text background-{{ book.background_theme }}"{% if book.background_theme == 'custom' and book.background_image %} style="background-image:url('{% web_image book.background_image 1280 %}')"{% endif %}><h1>{{ current.title }}</h1><div class="story-text">{{ current.text|linebreaks }}</div></article>
           {% if current.audio %}<audio class="spread-audio" preload="metadata" src="{{ current.audio.url }}"></audio>{% endif %}
         {% else %}
-          {% for leaf in spread.pages %}<article class="spread-leaf spread-picture"><img src="{{ leaf.illustration.url }}" alt="{{ leaf.title }}"></article>{% if leaf.audio %}<audio class="spread-audio" preload="metadata" src="{{ leaf.audio.url }}"></audio>{% endif %}{% endfor %}
+          {% for leaf in spread.pages %}<article class="spread-leaf spread-picture"><img src="{% web_image leaf.illustration 960 %}" srcset="{% web_image leaf.illustration 640 %} 640w, {% web_image leaf.illustration 960 %} 960w, {% web_image leaf.illustration 1280 %} 1280w, {% web_image leaf.illustration 1920 %} 1920w" sizes="(max-width: 900px) 100vw, 900px" decoding="async" alt="{{ leaf.title }}"></article>{% if leaf.audio %}<audio class="spread-audio" preload="metadata" src="{{ leaf.audio.url }}"></audio>{% endif %}{% endfor %}
         {% endif %}
       </div>
       {% endif %}

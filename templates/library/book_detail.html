@@ -1,9 +1,9 @@
-{% extends 'base.html' %}
+{% extends 'base.html' %}{% load web_images %}
 {% block content %}
 <article class="section story-service">
   <nav class="story-breadcrumbs" aria-label="Хлебные крошки"><a href="{% url 'home' %}">Главная</a><span aria-hidden="true">/</span><a href="{% url 'catalog' %}">Истории наших читателей</a><span aria-hidden="true">/</span><span>{{ book.title }}</span></nav>
   <div class="public-story-hero">
-    {% if cover %}<img class="public-story-cover" src="{{ cover.url }}" alt="Обложка книги «{{ book.title }}»" width="500" height="700">{% endif %}
+    {% if cover %}<img class="public-story-cover" src="{% web_image cover 640 %}" srcset="{% web_image cover 320 %} 320w, {% web_image cover 640 %} 640w, {% web_image cover 960 %} 960w" sizes="(max-width: 760px) 65vw, 320px" decoding="async" alt="Обложка книги «{{ book.title }}»" width="500" height="700">{% endif %}
     <div><p class="eyebrow">ПРИМЕР ПЕРСОНАЛЬНОЙ ДЕТСКОЙ КНИГИ</p><h1>{{ book.title }}</h1><p class="muted">{{ book.age_label }}</p>{% if book.description %}<div class="public-story-description">{{ book.description|linebreaks }}</div>{% else %}<p>История, в которой детские мечты и маленькие приключения становятся книгой. Откройте пример и познакомьтесь с иллюстрациями и страницами.</p>{% endif %}<a class="button primary" href="{% url 'reader' book.slug %}">Открыть книгу ↗</a><a class="text-link" href="{% url 'order' %}">Заказать свою историю →</a></div>
   </div>
   {% if excerpt %}<section class="public-story-excerpt"><h2>Заглянем в историю</h2><blockquote>{{ excerpt }}</blockquote></section>{% endif %}

@@ -178,7 +178,8 @@ class PlatformTests(TestCase):
         self.assertEqual(self.private.background_theme, 'custom')
         self.client.force_login(self.a)
         response = self.client.get(reverse('reader', args=[self.private.slug]))
-        self.assertContains(response, "background-image:url('" + self.private.background_image.url)
+        from .images import image_url
+        self.assertContains(response, "background-image:url('" + image_url(self.private.background_image, 1280))
         self.private.background_theme = 'sky'
         self.private.full_clean()
         self.assertEqual(self.private.background_theme, 'sky')

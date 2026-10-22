@@ -1,7 +1,7 @@
 <div class="web-shelf-grid">
 {% for book in books %}
   <a class="web-shelf-book" href="{{ book.app_reader }}">
-    <div class="web-shelf-cover">{% if book.app_cover %}<img src="{{ book.app_cover }}" alt="Обложка: {{ book.title }}" loading="lazy">{% else %}<span class="web-shelf-placeholder" aria-hidden="true">✧<strong>{{ book.title }}</strong></span>{% endif %}<span class="web-shelf-play" aria-hidden="true">▶</span></div>
+    <div class="web-shelf-cover">{% if book.app_cover %}<img src="{{ book.app_cover }}" srcset="{{ book.app_cover_small }} 320w, {{ book.app_cover }} 640w" sizes="(max-width: 700px) 45vw, 240px" decoding="async" alt="Обложка: {{ book.title }}" loading="lazy">{% else %}<span class="web-shelf-placeholder" aria-hidden="true">✧<strong>{{ book.title }}</strong></span>{% endif %}<span class="web-shelf-play" aria-hidden="true">▶</span></div>
     <h3>{{ book.title }}</h3><p>{{ book.age_label }}</p>
   </a>
 {% empty %}<p class="web-shelf-empty muted">{{ empty_message }}</p>{% endfor %}

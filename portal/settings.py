@@ -16,8 +16,11 @@ ALLOWED_HOSTS = [v.strip() for v in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.
 CSRF_TRUSTED_ORIGINS = [v.strip() for v in os.getenv('CSRF_TRUSTED_ORIGINS', '').split(',') if v.strip()]
 SITE_URL = os.getenv('SITE_URL', 'http://127.0.0.1:8000').rstrip('/')
 GOOGLE_SITE_VERIFICATION = os.getenv('GOOGLE_SITE_VERIFICATION', '').strip()
+ANALYTICS_ENABLED = os.getenv('ANALYTICS_ENABLED', '1') == '1'
+ANALYTICS_RETENTION_DAYS = max(1, int(os.getenv('ANALYTICS_RETENTION_DAYS', '90')))
+ANALYTICS_TRUSTED_PROXIES = [value.strip() for value in os.getenv('ANALYTICS_TRUSTED_PROXIES', '127.0.0.1/32,::1/128,172.16.0.0/12').split(',') if value.strip()]
 INSTALLED_APPS = ['django.contrib.admin', 'django.contrib.auth', 'django.contrib.contenttypes', 'django.contrib.sessions', 'django.contrib.messages', 'django.contrib.staticfiles', 'library']
-MIDDLEWARE = ['django.middleware.security.SecurityMiddleware', 'library.seo.SearchVisibilityMiddleware', 'whitenoise.middleware.WhiteNoiseMiddleware', 'django.contrib.sessions.middleware.SessionMiddleware', 'django.middleware.common.CommonMiddleware', 'django.middleware.csrf.CsrfViewMiddleware', 'django.contrib.auth.middleware.AuthenticationMiddleware', 'django.contrib.messages.middleware.MessageMiddleware', 'django.middleware.clickjacking.XFrameOptionsMiddleware', 'library.middleware.RateLimitMiddleware']
+MIDDLEWARE = ['django.middleware.security.SecurityMiddleware', 'library.seo.SearchVisibilityMiddleware', 'whitenoise.middleware.WhiteNoiseMiddleware', 'django.contrib.sessions.middleware.SessionMiddleware', 'django.middleware.common.CommonMiddleware', 'django.middleware.csrf.CsrfViewMiddleware', 'django.contrib.auth.middleware.AuthenticationMiddleware', 'django.contrib.messages.middleware.MessageMiddleware', 'django.middleware.clickjacking.XFrameOptionsMiddleware', 'library.middleware.RateLimitMiddleware', 'library.analytics.VisitMiddleware']
 ROOT_URLCONF = 'portal.urls'
 TEMPLATES = [{'BACKEND': 'django.template.backends.django.DjangoTemplates', 'DIRS': [BASE_DIR / 'templates'], 'APP_DIRS': True, 'OPTIONS': {'context_processors': ['django.template.context_processors.request', 'django.contrib.auth.context_processors.auth', 'django.contrib.messages.context_processors.messages', 'library.seo.metadata_context']}}]
 WSGI_APPLICATION = 'portal.wsgi.application'

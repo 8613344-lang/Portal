@@ -7,7 +7,7 @@ from django.contrib.auth.models import User
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import UserChangeForm
 from .models import Book, BookPage, BookAccess, Order, NotificationRecipient, Notification
-from .models import UserAgreement, HomepagePromotion, AudioPreview, BookVideo
+from .models import UserAgreement, HomepagePromotion, AudioPreview, BookVideo, HomepageItem, PageVisit
 from .forms import BookAdminForm
 
 admin.site.site_header = 'Книги рядом · управление'
@@ -47,6 +47,12 @@ class AccessInline(admin.TabularInline):
 class BookAdmin(admin.ModelAdmin):
     readonly_fields = ['viewing_link', 'video_viewing_link', 'video_status']
     actions = ['rotate_viewing_links', 'rotate_video_links']
+
+    def get_search_results(self, request, queryset, search_term):
+        queryset, distinct = super().get_search_results(request, queryset, search_term)
+        if request.GET.get('model_name') == 'homepageitem' and request.GET.get('field_name') == 'book':
+            queryset = queryset.filter(status='published', visibility='public')
+        return queryset, distinct
 
     @admin.display(description='Ссылка «Начать просмотр» и QR')
     def viewing_link(self, obj):
@@ -237,3 +243,69 @@ class AudioPreviewAdmin(admin.ModelAdmin):
         if db_field.name == 'audio':
             field.widget.attrs['accept'] = '.mp3,.wav,audio/mpeg,audio/wav'
         return field
+
+
+@admin.register(HomepageItem)
+class HomepageItemAdmin(admin.ModelAdmin):
+    list_display = ['__str__', 'kind', 'position', 'enabled', 'book']
+    list_editable = ['position', 'enabled']
+    list_filter = ['kind', 'enabled']
+    search_fields = ['title', 'book__title']
+    autocomplete_fields = ['book']
+    fieldsets = [
+        ('Показ на главной', {'fields': ('kind', 'enabled', 'position'),
+            'description': 'Раздел «А какая история будет у вас?». Порядок задаётся числом. Отключённые карточки не показываются.'}),
+        ('Книга', {'fields': ('book',), 'description': 'Только опубликованные публичные книги. Название, описание и обложка берутся из книги. Если доступ изменится, карточка скроется автоматически.'}),
+        ('Идея книги', {'fields': ('title', 'description', 'image', 'default_image', 'theme'),
+            'description': 'Для типа «Идея книги». Загрузите обложку или выберите готовую иллюстрацию. Кнопка ведёт к заказу.'}),
+    ]
+
+
+@admin.register(PageVisit)
+class PageVisitAdmin(admin.ModelAdmin):
+    list_display = ['occurred_at', 'kind', 'path', 'book', 'book_page', 'visitor_user', 'ip_address', 'browser', 'browser_version', 'device', 'is_bot']
+    list_filter = ['kind', 'is_bot', 'browser', 'device', 'occurred_at']
+    search_fields = ['path', 'ip_address', 'user__email', 'book__title', 'user_agent']
+    list_select_related = ['book', 'user']
+    date_hierarchy = 'occurred_at'
+    change_list_template = 'admin/library/pagevisit/change_list.html'
+    readonly_fields = [field.name for field in PageVisit._meta.fields]
+    actions = None
+
+    @admin.display(description='Пользователь', ordering='user__email')
+    def visitor_user(self, obj):
+        return (obj.user.email or obj.user.first_name or obj.user.username) if obj.user_id else 'Гость'
+
+    def has_add_permission(self, request): return False
+    def has_change_permission(self, request, obj=None): return False
+
+    def get_urls(self):
+        from django.urls import path
+        return [path('dashboard/', self.admin_site.admin_view(self.dashboard), name='library_pagevisit_dashboard')] + super().get_urls()
+
+    def dashboard(self, request):
+        from datetime import timedelta
+        from django.core.exceptions import PermissionDenied
+        from django.db.models import Count, Q
+        from django.db.models.functions import TruncDate
+        from django.template.response import TemplateResponse
+        if not self.has_view_permission(request): raise PermissionDenied
+        days = request.GET.get('days', '30')
+        days = int(days) if days in ('7', '30', '90') else 30
+        include_bots = request.GET.get('bots') == '1'
+        visits = PageVisit.objects.filter(occurred_at__gte=timezone.now()-timedelta(days=days))
+        if not include_bots: visits = visits.filter(is_bot=False)
+        totals = visits.aggregate(total=Count('pk'), openings=Count('pk', filter=Q(kind='book_open')),
+            turns=Count('pk', filter=Q(kind='book_page')), videos=Count('pk', filter=Q(kind='video')), users=Count('user', distinct=True))
+        daily = list(visits.annotate(day=TruncDate('occurred_at')).values('day').annotate(total=Count('pk'), visitors=Count('visitor_key', distinct=True)).order_by('day'))
+        peak = max((row['total'] for row in daily), default=1)
+        for row in daily: row['percent'] = round(row['total']/peak*100)
+        books = visits.filter(book__isnull=False).values('book_id', 'book__title').annotate(
+            openings=Count('pk', filter=Q(kind='book_open')), turns=Count('pk', filter=Q(kind='book_page')),
+            videos=Count('pk', filter=Q(kind='video'))).order_by('-openings', '-turns')[:20]
+        pages = visits.values('path').annotate(total=Count('pk')).order_by('-total')[:20]
+        return TemplateResponse(request, 'admin/library/pagevisit/dashboard.html', {
+            **self.admin_site.each_context(request), 'title': 'Посещения сайта и просмотры книг',
+            'opts': self.model._meta, 'days': days, 'include_bots': include_bots,
+            'totals': totals, 'daily': daily, 'books': books, 'pages': pages,
+        })

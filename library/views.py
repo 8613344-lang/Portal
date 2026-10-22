@@ -12,7 +12,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods, require_POST
 from .forms import OrderForm, PageAudioForm
 from .models import Book, BookPage, Notification, NotificationRecipient, Order
-from .models import UserAgreement, HomepagePromotion, AudioPreview
+from .models import UserAgreement, HomepagePromotion, AudioPreview, HomepageItem
 from .sheets import book_sheets, ending_qrs, reader_spread
 from django.urls import reverse
 from .seo import home_metadata, set_metadata
@@ -40,6 +40,9 @@ def home(request):
         })
     return render(request, 'library/home.html', {
         'examples': public_books[:3],
+        'showcase': HomepageItem.objects.filter(enabled=True).filter(
+            Q(kind='idea') | Q(kind='book', book__status='published', book__visibility='public')
+        ).select_related('book__cover_page'),
         'audio_previews': audio_previews,
         'promotion': HomepagePromotion.objects.filter(pk=1).first() or HomepagePromotion(),
     })
@@ -90,6 +93,9 @@ def reader(request, slug, shared=False):
     except ValueError: number = 1
     number = max(1, min(number, len(pages)))
     current = pages[number - 1] if pages else None
+    request.visit_book = book
+    request.visit_book_page = number
+    request.visit_kind = 'book_page' if request.headers.get('X-Requested-With') == 'book-reader' else 'book_open'
     permission = 'library.change_bookpage' if current.kind == 'story' else 'library.change_book'
     can_edit = request.user.is_authenticated and request.user.is_staff and request.user.has_perm(permission)
     audio_action = reverse('page-audio', args=[current.pk]) if current.kind == 'story' else reverse('sheet-audio', args=[book.slug, current.kind])
@@ -215,6 +221,8 @@ def privacy(request):
     app_mode = request.GET.get('app') == '1'
     return render(request, 'library/privacy.html', {
         'agreement': agreement, 'app_mode': app_mode,
+        'analytics_enabled': settings.ANALYTICS_ENABLED,
+        'analytics_retention_days': settings.ANALYTICS_RETENTION_DAYS,
         'device': 'tablet' if request.GET.get('device') == 'tablet' else 'phone',
         'base_template': 'app_base.html' if app_mode else 'base.html',
     })
@@ -243,6 +251,10 @@ def ranged_field_chunks(field, start, length):
 @never_cache
 @require_http_methods(['GET', 'HEAD'])
 def private_file(request, path):
+    return stream_upload(request, authorized_upload(request, path))
+
+
+def authorized_upload(request, path):
     file_field = None
     book = Book.objects.filter(Q(cover=path) | Q(background_image=path) | Q(cover_audio=path) | Q(ending_image=path) | Q(ending_audio=path)).first()
     page = BookPage.objects.filter(Q(illustration=path) | Q(audio=path)).select_related('book').first()
@@ -260,13 +272,18 @@ def private_file(request, path):
                 raise Http404
             file_field = order.photo
         else:
+            item = HomepageItem.objects.filter(image=path).first()
+            if item:
+                if not (item.kind == 'idea' and item.enabled) and not (request.user.is_authenticated and request.user.is_staff and request.user.has_perm('library.view_homepageitem')):
+                    raise Http404
+                return item.image
             preview = AudioPreview.objects.filter(audio=path).first()
             if not preview or not request.user.is_authenticated or not request.user.is_staff or not (
                 request.user.has_perm('library.view_audiopreview') or request.user.has_perm('library.change_audiopreview')
             ):
                 raise Http404
             file_field = preview.audio
-    return stream_upload(request, file_field)
+    return file_field
 
 
 @never_cache

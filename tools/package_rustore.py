@@ -220,7 +220,7 @@ def select_files(listing: dict) -> tuple[list[Path], dict]:
         "rustore/listing.json", "rustore/icon-512.png",
         "docs/RUSTORE.md", "docs/ANDROID.md", "docs/ACCOUNTS.md",
         "docs/DEPLOYMENT.md", "docs/TESTING.md", "rustore/privacy-draft.md",
-        "docs/VIDEO.md", "docs/SEO.md",
+        "docs/VIDEO.md", "docs/SEO.md", "docs/IMAGES_AND_STATISTICS.md",
         "android/releases/README.md",
         "android/build.gradle", "android/settings.gradle", "android/gradle.properties",
         "android/app/build.gradle", "android/gradlew", "android/gradlew.bat",

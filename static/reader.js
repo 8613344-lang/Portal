@@ -134,7 +134,7 @@ if (reader && document.querySelector('#page-only')) {
     url.searchParams.set('page', String(number));
     url.hash = '';
     try {
-      const response = await fetch(url, {cache:'no-store', signal:controller.signal});
+      const response = await fetch(url, {cache:'no-store', signal:controller.signal, headers:{'X-Requested-With':'book-reader'}});
       if (!response.ok) throw new Error('page-unavailable');
       const html = new DOMParser().parseFromString(await response.text(), 'text/html');
       const incoming = html.querySelector('[data-book-reader]');

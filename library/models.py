@@ -292,3 +292,60 @@ class AudioPreview(models.Model):
     def get_absolute_url(self):
         from django.urls import reverse
         return reverse('audio-preview', args=[self.position])
+
+
+class HomepageItem(models.Model):
+    kind = models.CharField('Тип карточки', max_length=10, choices=[('book', 'Книга'), ('idea', 'Идея книги')], default='idea')
+    book = models.ForeignKey(Book, verbose_name='Книга', null=True, blank=True, on_delete=models.SET_NULL)
+    title = models.CharField('Название идеи', max_length=200, blank=True)
+    description = models.TextField('Описание идеи', max_length=1000, blank=True)
+    image = models.FileField('Обложка идеи', upload_to=private_path, blank=True)
+    default_image = models.CharField('Готовая иллюстрация', max_length=20, default='forest',
+        choices=[('forest', 'Лес и дружба'), ('space', 'Космос'), ('adventure', 'Маленькое приключение')])
+    theme = models.CharField('Цвет карточки', max_length=10, default='sage',
+        choices=[('sage', 'Шалфейный'), ('blue', 'Небесный'), ('cream', 'Кремовый')])
+    position = models.PositiveSmallIntegerField('Порядок', default=1)
+    enabled = models.BooleanField('Показывать на главной', default=True)
+
+    class Meta:
+        ordering = ['position', 'pk']
+        verbose_name = 'Книга / идея на главной'
+        verbose_name_plural = 'Книги и идеи на главной'
+
+    def __str__(self): return self.title or (str(self.book) if self.book_id else 'Карточка книги')
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        self.image = normalize_image(self.image)
+        if self.kind == 'idea' and not self.title.strip():
+            raise ValidationError({'title': 'Укажите название идеи.'})
+        if self.kind == 'book' and self.enabled and (not self.book_id or self.book.status != 'published' or self.book.visibility != 'public'):
+            raise ValidationError({'book': 'На главной можно показывать только опубликованную публичную книгу.'})
+
+
+class PageVisit(models.Model):
+    occurred_at = models.DateTimeField('Время', default=timezone.now, db_index=True)
+    kind = models.CharField('Событие', max_length=20, default='page', db_index=True, choices=[
+        ('page', 'Посещение страницы'), ('book_open', 'Открытие книги'),
+        ('book_page', 'Переход по страницам книги'), ('video', 'Открытие видеоплеера')])
+    path = models.CharField('Страница', max_length=300)
+    book = models.ForeignKey(Book, null=True, blank=True, on_delete=models.SET_NULL, verbose_name='Книга')
+    book_page = models.PositiveIntegerField('Страница книги', null=True, blank=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.CASCADE, verbose_name='Пользователь')
+    ip_address = models.GenericIPAddressField('IP', null=True, blank=True)
+    visitor_key = models.CharField('Идентификатор посетителя за день', max_length=64)
+    browser = models.CharField('Браузер', max_length=50, blank=True)
+    browser_version = models.CharField('Версия браузера', max_length=60, blank=True)
+    os = models.CharField('ОС', max_length=60, blank=True)
+    device = models.CharField('Устройство', max_length=20, blank=True)
+    user_agent = models.CharField('User-Agent', max_length=1024, blank=True)
+    referrer = models.CharField('Источник (домен)', max_length=255, blank=True)
+    is_bot = models.BooleanField('Предположительно робот', default=False, db_index=True)
+
+    class Meta:
+        ordering = ['-occurred_at', '-pk']
+        verbose_name = 'Посещение сайта'
+        verbose_name_plural = 'Статистика посещений'
+        indexes = [models.Index(fields=['book', 'kind', 'occurred_at'], name='visit_book_kind_time')]
+
+    def __str__(self): return f'{self.occurred_at:%d.%m.%Y %H:%M} · {self.path}'
