@@ -1,4 +1,4 @@
-{% extends base_template|default:'base.html' %}{% load web_images %}
+{% extends base_template|default:'base.html' %}{% load web_images static %}
 {% block title %}{{ book.title }} · Книги рядом{% endblock %}
 {% block content %}
 <section class="reader-shell" data-book-reader data-pdf-url="{% url 'book-export' book.slug 'pdf' %}" data-video-url="{% url 'book-video' book.slug %}" data-account="{% if user.is_authenticated %}{{ user.pk }}{% else %}guest{% endif %}" data-app="{{ app_mode|yesno:'true,false' }}" data-device="{{ device }}" data-shelf-return="{{ shelf_return_url }}" data-autostart="{{ shared|yesno:'true,false' }}" data-number="{{ number }}" data-total="{{ total }}" data-focus-previous="{{ spread.previous }}" data-focus-next="{{ spread.next }}" data-focus-label="{{ spread.label }}">
@@ -19,15 +19,20 @@
     </div>{% endif %}
   </div>
   {% if current %}<div class="focus-controls" aria-label="Управление просмотром страницы">
-    <button type="button" id="focus-exit">← {% if app_mode %}Мои книги{% elif shelf_mode %}К книжной полке{% else %}Вернуть меню{% endif %}</button>
-    <button type="button" id="focus-previous" aria-label="Предыдущая страница">← Назад</button>
-    <button type="button" id="focus-play" aria-pressed="false">▶ Авточтение</button>
-    <button type="button" id="focus-next" aria-label="Следующая страница">Вперёд →</button>
-    <a id="focus-video" href="{% url 'book-video' book.slug %}{% if app_mode %}?app=1&amp;device={{ device }}{% endif %}">▶ Видео</a>
-    <span id="focus-number">{{ number }} / {{ total }}</span>
-    <label for="page-delay">Без аудио: <input id="page-delay" type="number" min="3" max="300" value="15"> сек.</label>
-    <span id="auto-status" role="status"></span>
-  </div>{% endif %}
+    <div class="focus-pagination">
+      <button type="button" id="focus-previous" aria-label="Предыдущая страница" title="Предыдущая страница"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg></button>
+      <span id="focus-number">{{ number }} / {{ total }}</span>
+      <button type="button" id="focus-next" aria-label="Следующая страница" title="Следующая страница"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 6 6 6-6 6"/></svg></button>
+    </div>
+    <div class="focus-toolbar">
+      <button type="button" id="focus-exit" aria-label="Вернуться к меню" title="Вернуться к меню"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v11H5V10M9 21v-8h6v8"/></svg></button>
+      <button type="button" id="focus-play" aria-label="Включить авточтение" title="Включить авточтение" aria-pressed="false"><svg class="focus-play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 4 12 8-12 8Z"/></svg><svg class="focus-pause-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4h3v16H7zM15 4h3v16h-3z"/></svg></button>
+      <a id="focus-video" aria-label="Видео книги" title="Видео книги" href="{% url 'book-video' book.slug %}{% if app_mode %}?app=1&amp;device={{ device }}{% endif %}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="12" height="12" rx="2"/><path d="m15 10 6-3v10l-6-3"/></svg></a>
+      <label for="page-delay"><span>без аудио</span><input id="page-delay" aria-label="Время страницы без аудио, секунд" type="number" inputmode="numeric" min="3" max="300" value="15"><span>сек.</span></label>
+    </div>
+    <span id="auto-status" class="sr-only" role="status"></span>
+  </div>
+  <audio id="reader-playback" preload="metadata" data-silence="{% static 'reader-silence.mp3' %}" hidden aria-hidden="true"></audio>{% endif %}
   {% if current %}
   <div class="reader-layout">
     <aside class="contents"><p class="eyebrow">СОДЕРЖАНИЕ</p><ol>{% for page in pages %}<li><a class="{% if page.pk == current.pk %}active{% endif %}" href="{% querystring page=forloop.counter %}"><span>{{ forloop.counter|stringformat:'02d' }}</span>{{ page.title }}</a></li>{% endfor %}</ol></aside>

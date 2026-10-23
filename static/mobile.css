@@ -1,5 +1,6 @@
 /* Mobile web shell; immersive reading keeps its own controls. */
-.mobile-nav{display:none}
+html{background:#fbf7ee}
+.mobile-nav,.mobile-nav-dock{display:none}
 .website .footer-links{flex-wrap:wrap;gap:12px 18px;min-width:0}
 .website .story-intro>div{min-width:0}.website .story-intro .text-link{white-space:normal}
 .install-offer[hidden],.install-page [hidden]{display:none!important}
@@ -21,13 +22,13 @@
 .install-steps strong{font-size:15px}.install-steps p{margin-top:5px;font-size:13px;line-height:1.8;color:#626d6d}.install-steps svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.7;vertical-align:middle;margin-left:4px}
 .install-shelf-link{display:flex;justify-content:space-between;align-items:center;min-height:48px;border-top:1px solid #e5e3d8;margin-top:26px;padding-top:16px;font-size:14px;font-weight:600}
 .install-note{grid-column:1/-1;border-radius:18px;padding:22px 26px;background:#ece7f3;line-height:1.8}.install-note strong{font-size:15px}.install-note p{font-size:13px;color:#655e70;margin-top:6px}
-body.book-focus .mobile-nav,body.book-focus .install-offer{display:none!important}
-body.book-focus .focus-controls{bottom:max(8px,env(safe-area-inset-bottom,0px))}
+body.book-focus .mobile-nav-dock,body.book-focus .mobile-nav,body.book-focus .install-offer{display:none!important}
 @media(max-width:1100px), (max-width:1366px) and (pointer:coarse){
-  body.website{padding-bottom:calc(76px + env(safe-area-inset-bottom,0px))}
+  body.website{padding-bottom:calc(100px + env(safe-area-inset-bottom,0px))}
   body.website.book-focus{padding-bottom:0}
-  .website .mobile-nav{position:fixed;z-index:25;bottom:0;left:0;right:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:7px max(12px,env(safe-area-inset-right,0px)) calc(7px + env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px));border-top:1px solid #e4e2d8;background:#fffdf9f5;backdrop-filter:blur(12px);font-size:11px}
-  .mobile-nav a{min-height:54px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border-radius:12px;color:#626d6d}.mobile-nav a[aria-current=page]{color:#365847;background:#edf0e3}.mobile-nav svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round}
+  .website .mobile-nav-dock{display:block;position:fixed;z-index:25;bottom:0;left:0;right:0;padding:14px max(16px,env(safe-area-inset-right,0px)) max(12px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));background:linear-gradient(to bottom,#fbf7ee00,#fbf7ee 14px);pointer-events:none;isolation:isolate}
+  .website .mobile-nav{position:relative;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;max-width:480px;margin:0 auto;padding:6px 8px;border:1px solid #ebeae5;border-radius:999px;background:#fff;box-shadow:0 4px 24px #33384515;font-size:11px;pointer-events:auto}
+  .mobile-nav a{min-height:54px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;border-radius:999px;color:#626d6d}.mobile-nav a[aria-current=page]{color:#365847;background:#edf0e3}.mobile-nav svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round}
   .install-offer{margin:16px 24px 0}
   .website input:not([type=checkbox]):not([type=hidden]),.website textarea,.website select{font-size:16px;min-height:46px}
   .website input[type=checkbox]{width:18px;height:18px}

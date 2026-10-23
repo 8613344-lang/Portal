@@ -28,3 +28,28 @@ body.book-focus .focus-controls button{font-size:14px;min-height:40px}
 .ending-layout.two-codes .ending-copy{order:2;width:100%;text-align:center}
 .sheet-overlay .ending-layout .ending-copy{color:inherit}
 @media(max-width:700px){.ending-layout{gap:10px}.ending-layout .project-qr{width:100px}.ending-layout h2{font-size:14px}.ending-layout .ending-qr-row{gap:12px}.ending-layout .project-qr span{font-size:10px}}
+
+/* One persistent viewport and a compact floating toolbar, including Safari. */
+html.reader-focus{background:#242721;overflow:hidden;overscroll-behavior:none}
+body.book-focus{position:fixed;inset:0;width:100%;height:var(--reader-height,100%);overscroll-behavior:none}
+body.book-focus .reader-shell{position:relative;width:100%;height:var(--reader-height,100vh)}
+.reading-sheet{touch-action:pan-y pinch-zoom}
+.reading-sheet img{-webkit-user-drag:none}
+body.book-focus .focus-controls{position:absolute;display:flex;flex-direction:column;gap:8px;bottom:calc(12px + env(safe-area-inset-bottom,0px));left:50%;width:max-content;max-width:calc(100% - 24px);padding:0;border:0;border-radius:0;background:transparent;color:#535962;box-shadow:none;z-index:30}
+.focus-toolbar,.focus-pagination{display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid #eeedf0;box-shadow:0 5px 25px #0002;border-radius:999px}
+.focus-toolbar{gap:4px;padding:8px 14px}
+.focus-pagination{padding:0 4px;background:#fffffff5}
+body.book-focus .focus-controls button,body.book-focus .focus-controls a{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;min-height:44px;flex:0 0 44px;padding:0;border:0;border-radius:50%;background:transparent;color:inherit;text-decoration:none;line-height:1}
+body.book-focus .focus-controls button:hover,body.book-focus .focus-controls a:hover{background:#f0f2f5;color:#2c3d45}
+.focus-controls svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.focus-controls .focus-pause-icon{display:none}.focus-controls .is-playing .focus-play-icon{display:none}.focus-controls .is-playing .focus-pause-icon{display:block}
+.focus-controls #focus-number{min-width:58px;text-align:center;font-size:12px;line-height:1.4}
+body.book-focus .focus-controls label{display:flex;align-items:center;gap:8px;border-left:1px solid #e5e6e9;margin-left:4px;padding-left:14px;font-size:13px;white-space:nowrap}
+.focus-controls label span{font-size:inherit}
+body.book-focus .focus-controls #page-delay{appearance:textfield;-moz-appearance:textfield;width:44px;min-width:0;height:36px;min-height:36px;padding:4px 1px;border:0;border-radius:999px;box-shadow:inset 0 1px 5px #293b4012;background:#f1f2f5;color:#34414c;font-size:16px;font-weight:600;text-align:center;line-height:1.3}
+.focus-controls #page-delay::-webkit-inner-spin-button,.focus-controls #page-delay::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+body.book-focus .focus-controls #auto-status{display:block}
+body.book-focus .focus-controls #auto-status:not(.sr-only){width:100%;max-width:320px;padding:9px 12px;border-radius:14px;background:#20382e;color:#fff;font-size:12px;line-height:1.6}
+@media(max-width:1100px), (pointer:coarse){body.book-focus .focus-controls{opacity:1;pointer-events:auto}}
+@media(max-width:380px){.focus-toolbar{gap:2px;padding:7px 8px}body.book-focus .focus-controls label{gap:6px;margin-left:2px;padding-left:8px;font-size:12px}body.book-focus .focus-controls #page-delay{width:36px;font-size:16px}}
+@media print{.mobile-nav-dock,body.book-focus .focus-controls{display:none!important}}

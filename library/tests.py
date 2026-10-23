@@ -553,12 +553,12 @@ class PlatformTests(TestCase):
     def test_reader_shows_exports_auto_reader_and_missing_audio_count(self):
         response = self.client.get(reverse('reader', args=[self.public.slug]))
         self.assertContains(response, 'Скачать книгу PDF')
-        self.assertContains(response, 'Без аудио:')
+        self.assertContains(response, 'aria-label="Время страницы без аудио, секунд"')
         self.assertNotContains(response, 'id="auto-toggle"')
         self.assertContains(response, 'id="focus-previous"')
         self.assertContains(response, 'id="focus-next"')
         self.assertContains(response, 'Начать просмотр')
-        self.assertContains(response, 'Вернуть меню')
+        self.assertContains(response, 'aria-label="Вернуться к меню"')
         self.assertNotContains(response, 'Скачать аудиокнигу MP3')
 
     def test_export_busy_returns_retry_after(self):

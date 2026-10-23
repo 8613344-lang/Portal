@@ -8,9 +8,10 @@ if (reader && document.querySelector('#page-only')) {
   const next = document.querySelector('#focus-next');
   const delay = document.querySelector('#page-delay');
   const status = document.querySelector('#auto-status');
+  const playback = document.querySelector('#reader-playback');
   let focusMode = false, running = false, changing = false;
   let interval = null, controller = null, controlsTimer = null;
-  let generation = 0, track = 0;
+  let generation = 0, track = 0, playingSource = null, playbackPrimed = false, previousScroll = 0;
   const observer = window.ResizeObserver ? new ResizeObserver(() => fitPage()) : {observe(){}, disconnect(){}};
   const clearTimer = () => { clearInterval(interval); interval = null; };
   const recordings = () => {
@@ -25,8 +26,8 @@ if (reader && document.querySelector('#page-only')) {
     document.body.style.setProperty('--reader-height', `${height}px`);
     const page = reader.querySelector('.focus-spread') || reader.querySelector('.reading-page');
     if (!page) return;
-    const controlsHeight = document.querySelector('.focus-controls').offsetHeight;
-    const availableHeight = Math.max(100, height - Math.max(controlsHeight + 24, 80));
+    const controls = document.querySelector('.focus-controls');
+    const availableHeight = Math.max(100, Math.min(height-24, controls.offsetTop-12));
     if (page.classList.contains('focus-spread')) {
       const stacked = innerHeight > innerWidth;
       page.classList.toggle('stacked', stacked);
@@ -53,7 +54,9 @@ if (reader && document.querySelector('#page-only')) {
     previous.disabled = changing || !Number(reader.dataset.focusPrevious);
     next.disabled = changing || !Number(reader.dataset.focusNext);
     document.querySelector('#focus-number').textContent = `${reader.dataset.focusLabel} / ${reader.dataset.total}`;
-    toggle.textContent = running ? 'Ⅱ Пауза' : '▶ Авточтение';
+    toggle.classList.toggle('is-playing', running);
+    toggle.setAttribute('aria-label', running ? 'Приостановить авточтение' : 'Включить авточтение');
+    toggle.title = toggle.getAttribute('aria-label');
     toggle.setAttribute('aria-pressed', String(running));
   }
   function watchPage() {
@@ -81,7 +84,9 @@ if (reader && document.querySelector('#page-only')) {
     controller = null;
     changing = false;
     recordings().forEach(audio => audio.pause());
+    playback.pause();
     status.textContent = message;
+    status.classList.toggle('sr-only', message === 'Авточтение приостановлено. Можно листать вручную.');
     updateControls();
     showControls();
   }
@@ -89,21 +94,26 @@ if (reader && document.querySelector('#page-only')) {
     if (changing) return;
     running = true;
     generation++;
+    status.classList.add('sr-only');
+    if (!activeAudio()) primePlayback();
     updateControls();
     if (!Number(reader.dataset.focusNext) && status.textContent.startsWith('Книга закончилась')) {
       await turnPage(1);
     } else await playPage();
   }
   function setFocus(enabled) {
+    if (enabled) previousScroll = window.scrollY;
     if (!enabled) stop();
     else reader.querySelectorAll('audio').forEach(audio => audio.pause());
     focusMode = enabled;
     if (window.bookScreenAwake) window.bookScreenAwake(enabled);
     document.body.classList.toggle('book-focus', enabled);
+    document.documentElement.classList.toggle('reader-focus', enabled);
     pageOnly.setAttribute('aria-pressed', String(enabled));
     track = 0;
-    bindAudio();
+    playingSource = null;
     if (enabled) {
+      window.scrollTo(0, 0);
       watchPage();
       showControls();
       document.activeElement.blur();
@@ -114,6 +124,7 @@ if (reader && document.querySelector('#page-only')) {
       clearTimeout(controlsTimer);
       document.body.classList.remove('focus-controls-visible');
       pageOnly.focus();
+      window.scrollTo(0, previousScroll);
     }
   }
   async function advance() {
@@ -124,8 +135,11 @@ if (reader && document.querySelector('#page-only')) {
   async function turnPage(number) {
     if (changing || number < 1 || number > Number(reader.dataset.total)) return;
     changing = true;
+    status.classList.add('sr-only');
     clearTimer();
     const version = ++generation;
+    playingSource = null;
+    playback.pause();
     recordings().forEach(audio => audio.pause());
     updateControls();
     status.textContent = 'Открываем страницу…';
@@ -148,7 +162,6 @@ if (reader && document.querySelector('#page-only')) {
       changing = false;
       controller = null;
       track = 0;
-      bindAudio();
       if (focusMode) watchPage();
       updateControls();
       showControls();
@@ -164,9 +177,13 @@ if (reader && document.querySelector('#page-only')) {
     const recording = activeAudio();
     if (recording) {
       const version = generation;
-      if (recording.ended) recording.currentTime = 0;
+      if (playingSource !== recording) {
+        playingSource = recording;
+        playback.src = recording.src;
+      } else if (playback.ended) playback.currentTime = 0;
+      if (playback.error) playback.load();
       status.textContent = 'Слушаем страницу. Разворот сменится после окончания записи.';
-      try { await recording.play(); }
+      try { await playback.play(); playbackPrimed = true; }
       catch (error) { if (version === generation) stop('Нажмите «Авточтение», чтобы запустить запись.'); }
     } else {
       const seconds = Math.max(3, Math.min(300, Number(delay.value) || 15));
@@ -181,27 +198,32 @@ if (reader && document.querySelector('#page-only')) {
       tick();
     }
   }
-  function bindAudio() {
-    recordings().forEach(recording => {
-      if (recording.dataset.readerBound) return;
-      recording.dataset.readerBound = '1';
-      recording.addEventListener('ended', () => {
-        if (!running || changing || recording !== activeAudio()) return;
-        track++;
-        if (track < recordings().length) void playPage();
-        else void advance();
-      });
-      recording.addEventListener('pause', () => {
-        if (running && !changing && !recording.ended && recording === activeAudio()) stop();
-      });
-      recording.addEventListener('error', () => {
-        if (running && !changing && recording === activeAudio()) stop('Не удалось воспроизвести запись. Можно продолжить вручную.');
-      });
-    });
+  function primePlayback() {
+    if (playbackPrimed || playingSource) return;
+    // Authorize this same player during a user gesture even on a silent cover.
+    playback.src = playback.dataset.silence;
+    void playback.play().then(() => {
+      playbackPrimed = true;
+      if (!playingSource) { playback.pause(); playback.removeAttribute('src'); playback.load(); }
+    }).catch(() => {});
   }
+  playback.addEventListener('ended', () => {
+    if (!running || changing || !playingSource || !playback.ended) return;
+    track++;
+    if (track < recordings().length) void playPage();
+    else void advance();
+  });
+  playback.addEventListener('pause', () => {
+    if (running && !changing && playingSource && playback.paused && !playback.ended) stop();
+  });
+  playback.addEventListener('error', () => {
+    if (running && !changing && playingSource && playback.error && playback.currentSrc === playingSource.src) {
+      stop('Не удалось воспроизвести запись. Можно продолжить вручную.');
+    }
+  });
   function manual(number) {
     if (changing || !number) return;
-    stop();
+    if (running) primePlayback();
     void turnPage(number);
   }
   pageOnly.addEventListener('click', () => setFocus(!focusMode));
@@ -218,6 +240,52 @@ if (reader && document.querySelector('#page-only')) {
   reader.addEventListener('pointerdown', showControls);
   window.addEventListener('resize', fitPage);
   if (window.visualViewport) window.visualViewport.addEventListener('resize', fitPage);
+  if (window.visualViewport) window.visualViewport.addEventListener('scroll', fitPage);
+  // Horizontal gestures turn one page; vertical scroll, zoom and controls stay native.
+  let gesture = null;
+  const canSwipe = target => target instanceof Element && target.closest('.reading-sheet') &&
+    !target.closest('a,button,input,textarea,select,audio,video,[contenteditable]') &&
+    (!window.visualViewport || window.visualViewport.scale <= 1.01) &&
+    !changing && window.getSelection()?.isCollapsed !== false;
+  const beginSwipe = (target, x, y, id) => {
+    gesture = canSwipe(target) && x >= 20 && x <= innerWidth-20 ?
+      {x, y, id, time:performance.now()} : null;
+  };
+  const finishSwipe = (target, x, y, id) => {
+    const start = gesture;
+    gesture = null;
+    if (!start || start.id !== id || !canSwipe(target) || performance.now()-start.time > 1500) return;
+    const dx = x-start.x, dy = y-start.y;
+    if (Math.abs(dx) < Math.max(44, Math.min(90, innerWidth*.14)) || Math.abs(dx) < Math.abs(dy)*1.8) return;
+    const number = focusMode ? Number(reader.dataset[dx < 0 ? 'focusNext' : 'focusPrevious']) :
+      Number(reader.dataset.number) + (dx < 0 ? 1 : -1);
+    if (number >= 1 && number <= Number(reader.dataset.total)) manual(number);
+  };
+  if (window.PointerEvent) {
+    reader.addEventListener('pointerdown', event => {
+      if (event.pointerType !== 'touch' && event.pointerType !== 'pen') return;
+      if (!event.isPrimary) { gesture = null; return; }
+      beginSwipe(event.target, event.clientX, event.clientY, event.pointerId);
+    });
+    document.addEventListener('pointerdown', event => { if (event.pointerType === 'touch' && !event.isPrimary) gesture = null; }, true);
+    reader.addEventListener('pointerup', event => {
+      if (event.pointerType === 'touch' || event.pointerType === 'pen') {
+        finishSwipe(event.target, event.clientX, event.clientY, event.pointerId);
+      }
+    });
+    reader.addEventListener('pointercancel', () => { gesture = null; });
+  } else {
+    reader.addEventListener('touchstart', event => {
+      if (event.touches.length !== 1) { gesture = null; return; }
+      const touch = event.touches[0]; beginSwipe(event.target, touch.clientX, touch.clientY, touch.identifier);
+    }, {passive:true});
+    reader.addEventListener('touchend', event => {
+      if (event.touches.length || event.changedTouches.length !== 1) { gesture = null; return; }
+      const touch = event.changedTouches[0]; finishSwipe(event.target, touch.clientX, touch.clientY, touch.identifier);
+    }, {passive:true});
+    reader.addEventListener('touchmove', event => { if (event.touches.length > 1) gesture = null; }, {passive:true});
+    reader.addEventListener('touchcancel', () => { gesture = null; });
+  }
   document.addEventListener('keydown', event => {
     if (!focusMode || event.target.closest('input,textarea,select')) return;
     if (event.key === 'Escape') { event.preventDefault(); exitReader(); }
