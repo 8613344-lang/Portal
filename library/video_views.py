@@ -1,9 +1,13 @@
+import json
+import math
+import re
+from django.db import transaction
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
-from .models import Book
+from .models import Book, VideoPosition
 from .videos import current_video, queue_video
 
 
@@ -61,6 +65,45 @@ def watch(request, slug):
         'base_template': 'app_base.html' if app else 'base.html'})
     response['Referrer-Policy'] = 'same-origin'
     return response
+
+
+@never_cache
+@require_http_methods(['GET', 'POST'])
+def position(request, slug):
+    book = allowed_book(request, slug)
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'Для синхронизации позиции войдите в аккаунт.'}, status=401)
+    video = payload(book)
+    revision = video['revision']
+    if request.method == 'GET':
+        row = VideoPosition.objects.filter(user=request.user, book=book, revision=revision).first()
+        return JsonResponse({'account': str(request.user.pk), 'revision': revision,
+            'position': row.position if row else 0, 'updated_at': row.updated_at.isoformat() if row else ''})
+    if video['state'] != 'ready':
+        return JsonResponse({'error': 'Видео ещё не готово.'}, status=409)
+    try:
+        data = json.loads(request.body)
+        if str(data['account']) != str(request.user.pk):
+            return JsonResponse({'error': 'Аккаунт изменился. Обновите страницу.'}, status=403)
+        if data['revision'] != revision:
+            return JsonResponse({'error': 'Версия видео изменилась.'}, status=409)
+        seconds, duration = float(data['position']), float(data['duration'])
+        client, sequence = data['client_id'], data['sequence']
+        if not (math.isfinite(seconds) and math.isfinite(duration) and 0 <= seconds <= duration <= 86400):
+            raise ValueError
+        if not isinstance(client, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', client): raise ValueError
+        if type(sequence) is not int or not 1 <= sequence <= 2**53-1: raise ValueError
+    except (ValueError, TypeError, KeyError, UnicodeDecodeError, OverflowError):
+        return JsonResponse({'error': 'Некорректная позиция видео.'}, status=400)
+    with transaction.atomic():
+        row, _ = VideoPosition.objects.get_or_create(user=request.user, book=book,
+            defaults={'revision': revision, 'client_id': client})
+        row = VideoPosition.objects.select_for_update().get(pk=row.pk)
+        # An older request from the same tab must not overwrite a later pagehide save.
+        if row.revision != revision or row.client_id != client or sequence > row.sequence:
+            row.revision, row.position, row.client_id, row.sequence = revision, seconds, client, sequence
+            row.save()
+    return JsonResponse({'account': str(request.user.pk), 'position': row.position})
 
 
 @never_cache

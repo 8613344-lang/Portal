@@ -6,6 +6,9 @@ db.sqlite3*
 media/
 staticfiles/
 static-preview/
+geoip/
+deploy/multisite/.env.gateway
+deploy/multisite/sites/*.caddy
 logs/
 backups/
 .coverage

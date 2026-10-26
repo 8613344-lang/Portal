@@ -1,0 +1,75 @@
+# Run one isolated copy per site with a unique -p project and SITE_KEY.
+x-portal: &portal
+  build: ../..
+  restart: unless-stopped
+  env_file: ../../.env
+  environment: &environment
+    POSTGRES_HOST: db
+    DEBUG: "0"
+    SECRET_KEY: ${SECRET_KEY:?Set a unique SECRET_KEY for this site}
+  networks: [backend]
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-portal}
+      POSTGRES_USER: ${POSTGRES_USER:-portal}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a database password for this site}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [backend]
+  app:
+    <<: *portal
+    environment:
+      <<: *environment
+      BEHIND_PROXY: "1"
+    volumes:
+      - private_media:/app/media
+      - geoip_data:/app/geoip
+    networks:
+      backend:
+      edge:
+        aliases: ["${SITE_KEY:?Set a unique SITE_KEY such as qicko}-app"]
+    depends_on:
+      db: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; r=urllib.request.Request('http://127.0.0.1:8000/health/', headers={'X-Forwarded-Proto':'https', 'Host':'localhost'}); urllib.request.urlopen(r, timeout=5)"]
+      interval: 15s
+      timeout: 6s
+      retries: 10
+      start_period: 30s
+  worker:
+    <<: *portal
+    command: ["python", "manage.py", "run_notifications"]
+    depends_on:
+      app: {condition: service_healthy}
+  video_worker:
+    <<: *portal
+    command: ["python", "manage.py", "run_videos"]
+    volumes:
+      - private_media:/app/media
+    depends_on:
+      app: {condition: service_healthy}
+  analytics_worker:
+    <<: *portal
+    command: ["python", "manage.py", "run_analytics"]
+    volumes:
+      - geoip_data:/app/geoip:ro
+    depends_on:
+      app: {condition: service_healthy}
+volumes:
+  postgres_data:
+  private_media:
+  geoip_data:
+networks:
+  backend:
+  edge:
+    external: true
+    name: portal_edge

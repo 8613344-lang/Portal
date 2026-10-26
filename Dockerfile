@@ -6,7 +6,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 RUN addgroup --system portal && adduser --system --ingroup portal portal
 COPY --chown=portal:portal . .
-RUN mkdir -p /app/media /app/staticfiles && chown -R portal:portal /app/media /app/staticfiles
+RUN mkdir -p /app/media /app/staticfiles /app/geoip && chown -R portal:portal /app/media /app/staticfiles /app/geoip
 USER portal
 EXPOSE 8000
 CMD ["sh", "deploy/start.sh"]

@@ -4,6 +4,9 @@
 media
 staticfiles
 static-preview
+geoip
+deploy/multisite/.env.gateway
+deploy/multisite/sites/*.caddy
 db.sqlite3*
 __pycache__
 backups

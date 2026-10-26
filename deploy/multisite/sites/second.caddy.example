@@ -1,0 +1,4 @@
+# Replace stories.example with your actual second domain.
+stories.example {
+    import portal_app stories-app:8000
+}

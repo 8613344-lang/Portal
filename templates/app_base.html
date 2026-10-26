@@ -6,7 +6,7 @@
 <meta name="portal-account-label" content="{% if user.is_authenticated %}{{ user.email }}{% else %}Гость{% endif %}">
 <title>{% block title %}Мои книги{% endblock %}</title>
 <link rel="stylesheet" href="{% static 'style.css' %}"><link rel="stylesheet" href="{% static 'android.css' %}"><link rel="stylesheet" href="{% static 'reader-layout.css' %}">
-<script src="{% static 'screen-awake.js' %}" defer></script><script src="{% static 'reader.js' %}" defer></script><script src="{% static 'book-video.js' %}" defer></script>
+<script src="{% static 'screen-awake.js' %}" defer></script><script src="{% static 'reader.js' %}" defer></script><script src="{% static 'video-position.js' %}" defer></script><script src="{% static 'book-video.js' %}" defer></script>
 </head><body class="app-shell device-{{ device }}">
 <header class="app-header site-header"><a class="brand" href="{% url 'app-shelf' %}?device={{ device }}">▤ Мои книги</a><nav>{% if user.is_authenticated %}<span>{{ user.first_name|default:user.username }}</span><form action="{% url 'app-logout' %}?device={{ device }}" method="post">{% csrf_token %}<button class="text-link">Выйти</button></form>{% else %}<a class="button secondary" href="{% url 'app-login' %}?device={{ device }}">Войти</a>{% endif %}</nav></header>
 <main>{% block content %}{% endblock %}</main>

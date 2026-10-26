@@ -1,7 +1,7 @@
 (() => {
   const panel = document.querySelector('[data-book-video]');
   if (!panel) return;
-  const player = panel.querySelector('video'), form = panel.querySelector('form');
+  const player = panel.querySelector('video'), form = panel.querySelector('.video-create');
   const message = panel.querySelector('[role=status]'), button = form ? form.querySelector('button') : null;
   const download = panel.querySelector('.video-download');
   let timer = null, requesting = false, revision = panel.dataset.videoRevision || null;
@@ -13,13 +13,16 @@
       button.textContent = data.state === 'ready' ? 'Пересоздать с выбранным временем' : 'Создать видео';
     }
     if (data.state === 'ready') {
-      if (player.getAttribute('src') !== data.file || revision !== data.revision) { player.src = data.file; player.load(); revision = data.revision; }
+      if (player.getAttribute('src') !== data.file || revision !== data.revision) { player.src = data.file; player.load(); }
+      revision = data.revision;
+      panel.dispatchEvent(new CustomEvent('video-revision', {detail:revision}));
       player.hidden = false; download.hidden = false; download.href = data.file + '?download=1';
       message.textContent = 'Видео готово и сохранено на сервере.';
     } else {
       player.pause(); player.hidden = true; download.hidden = true;
       if (player.hasAttribute('src')) { player.removeAttribute('src'); player.load(); }
       revision = null;
+      panel.dispatchEvent(new CustomEvent('video-revision', {detail:null}));
       message.textContent = data.state === 'queued' ? 'Видео в очереди на создание.' :
         data.state === 'rendering' ? 'Создаём видео: ' + data.progress + ' из ' + (data.total || '…') + ' разворотов.' :
         data.state === 'failed' ? data.error : data.state === 'stale' ?

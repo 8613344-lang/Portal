@@ -1,5 +1,9 @@
 # Развёртывание на локальном сервере
 
+Для нескольких независимых сайтов с разными доменами на одном сервере/IP используйте [общий gateway и отдельные стеки сайтов](MULTISITE.md). Обычный `compose.yaml` по-прежнему запускает один сайт.
+
+Обновление позиции видео и города/CSV статистики: примените миграцию 0013 командой `python manage.py migrate` (в Docker выполняется стартом app). Выполните `docker compose exec app python manage.py update_geoip` и `docker compose exec app python manage.py run_analytics --once`. База GeoIP хранится в новом volume `geoip_data`, подключённом к app и analytics_worker. Подробности — [статистика](IMAGES_AND_STATISTICS.md) и [видео](VIDEO.md).
+
 Обновление изображений и статистики: миграция 0012_homepage_items_and_visits и сервис analytics_worker включены в обычный docker compose up -d --build. Worker очищает записи старше ANALYTICS_RETENTION_DAYS (90 по умолчанию). Копии изображений хранятся в приватном media-volume, исходники сохраняются. [Карточки, изображения и статистика](IMAGES_AND_STATISTICS.md).
 
 Поисковая индексация: проверьте SITE_URL=https://qicko.ru в рабочем `.env`, обновите контейнеры и отправьте `/sitemap.xml` в Яндекс Вебмастер / Google Search Console. [Полная инструкция SEO](SEO.md). Новых миграций для SEO нет.

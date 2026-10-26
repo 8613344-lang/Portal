@@ -2,6 +2,7 @@ import time
 from django.core.management.base import BaseCommand
 from django.db import close_old_connections
 from library.analytics import prune_visits
+from library.geolocation import enrich_visits
 
 
 class Command(BaseCommand):
@@ -14,5 +15,6 @@ class Command(BaseCommand):
         while True:
             close_old_connections()
             while prune_visits(): pass
+            while enrich_visits(): pass
             if options['once']: return
             time.sleep(3600)

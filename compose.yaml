@@ -25,6 +25,7 @@ services:
       SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
     volumes:
       - private_media:/app/media
+      - geoip_data:/app/geoip
     depends_on:
       db: {condition: service_healthy}
     healthcheck:
@@ -71,6 +72,8 @@ services:
       SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
     depends_on:
       app: {condition: service_healthy}
+    volumes:
+      - geoip_data:/app/geoip:ro
     networks: [backend]
   gateway:
     image: caddy:2-alpine
@@ -90,6 +93,7 @@ services:
 volumes:
   postgres_data:
   private_media:
+  geoip_data:
   caddy_data:
   caddy_config:
 networks:

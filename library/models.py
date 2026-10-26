@@ -323,6 +323,19 @@ class HomepageItem(models.Model):
             raise ValidationError({'book': 'На главной можно показывать только опубликованную публичную книгу.'})
 
 
+class VideoPosition(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    book = models.ForeignKey(Book, on_delete=models.CASCADE)
+    revision = models.CharField(max_length=64)
+    position = models.FloatField(default=0, validators=[MinValueValidator(0)])
+    client_id = models.CharField(max_length=64)
+    sequence = models.PositiveBigIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['user', 'book'], name='unique_video_position')]
+
+
 class PageVisit(models.Model):
     occurred_at = models.DateTimeField('Время', default=timezone.now, db_index=True)
     kind = models.CharField('Событие', max_length=20, default='page', db_index=True, choices=[
@@ -333,6 +346,11 @@ class PageVisit(models.Model):
     book_page = models.PositiveIntegerField('Страница книги', null=True, blank=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.CASCADE, verbose_name='Пользователь')
     ip_address = models.GenericIPAddressField('IP', null=True, blank=True)
+    city = models.CharField('Город (предположительно)', max_length=120, blank=True)
+    region = models.CharField('Регион (предположительно)', max_length=120, blank=True)
+    country = models.CharField('Страна (предположительно)', max_length=120, blank=True)
+    geo_source = models.CharField('Источник GeoIP', max_length=120, blank=True)
+    geo_checked = models.BooleanField('IP проверен по GeoIP', default=False)
     visitor_key = models.CharField('Идентификатор посетителя за день', max_length=64)
     browser = models.CharField('Браузер', max_length=50, blank=True)
     browser_version = models.CharField('Версия браузера', max_length=60, blank=True)

@@ -12,6 +12,7 @@ from django.utils import timezone
 from django.utils.crypto import salted_hmac
 
 from .models import PageVisit
+from .geolocation import lookup
 
 logger = logging.getLogger(__name__)
 PAGE_ROUTES = {'home', 'catalog', 'book-service', 'book-detail', 'order', 'order-success',
@@ -81,7 +82,8 @@ class VisitMiddleware:
                 PageVisit.objects.create(kind=kind, path=path[:300], book=book,
                     book_page=getattr(request, 'visit_book_page', None), user=user, ip_address=address,
                     visitor_key=key, browser=browser, browser_version=version, os=os_name,
-                    device=device, user_agent=agent, referrer=referrer_origin(request.META.get('HTTP_REFERER', '')), is_bot=bot)
+                    device=device, user_agent=agent, referrer=referrer_origin(request.META.get('HTTP_REFERER', '')), is_bot=bot,
+                    **lookup(address))
         except DatabaseError:
             logger.warning('Could not save visit statistics', exc_info=False)
         return response

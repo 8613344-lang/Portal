@@ -44,6 +44,7 @@ urlpatterns = [
     path('books/<slug:slug>/', views.reader, name='reader'),
     path('books/<slug:slug>/video/', video_views.watch, name='book-video'),
     path('books/<slug:slug>/video/status/', video_views.status, name='book-video-status'),
+    path('books/<slug:slug>/video/position/', video_views.position, name='book-video-position'),
     path('books/<slug:slug>/video/create/', video_views.create, name='book-video-create'),
     path('books/<slug:slug>/video/file/', video_views.file, name='book-video-file'),
     path('books/<slug:slug>/download/<str:format>/', views.export_book, name='book-export'),

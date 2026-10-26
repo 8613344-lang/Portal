@@ -17,6 +17,7 @@ CSRF_TRUSTED_ORIGINS = [v.strip() for v in os.getenv('CSRF_TRUSTED_ORIGINS', '')
 SITE_URL = os.getenv('SITE_URL', 'http://127.0.0.1:8000').rstrip('/')
 GOOGLE_SITE_VERIFICATION = os.getenv('GOOGLE_SITE_VERIFICATION', '').strip()
 ANALYTICS_ENABLED = os.getenv('ANALYTICS_ENABLED', '1') == '1'
+ANALYTICS_GEOIP_PATH = Path(os.getenv('ANALYTICS_GEOIP_PATH', str(BASE_DIR / 'geoip' / 'city.mmdb')))
 ANALYTICS_RETENTION_DAYS = max(1, int(os.getenv('ANALYTICS_RETENTION_DAYS', '90')))
 ANALYTICS_TRUSTED_PROXIES = [value.strip() for value in os.getenv('ANALYTICS_TRUSTED_PROXIES', '127.0.0.1/32,::1/128,172.16.0.0/12').split(',') if value.strip()]
 INSTALLED_APPS = ['django.contrib.admin', 'django.contrib.auth', 'django.contrib.contenttypes', 'django.contrib.sessions', 'django.contrib.messages', 'django.contrib.staticfiles', 'library']

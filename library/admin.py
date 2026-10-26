@@ -263,12 +263,13 @@ class HomepageItemAdmin(admin.ModelAdmin):
 
 @admin.register(PageVisit)
 class PageVisitAdmin(admin.ModelAdmin):
-    list_display = ['occurred_at', 'kind', 'path', 'book', 'book_page', 'visitor_user', 'ip_address', 'browser', 'browser_version', 'device', 'is_bot']
+    list_display = ['occurred_at', 'kind', 'path', 'book', 'book_page', 'visitor_user', 'ip_address', 'city', 'country', 'browser', 'browser_version', 'device', 'is_bot']
     list_filter = ['kind', 'is_bot', 'browser', 'device', 'occurred_at']
-    search_fields = ['path', 'ip_address', 'user__email', 'book__title', 'user_agent']
+    search_fields = ['path', 'ip_address', 'city', 'region', 'country', 'user__email', 'book__title', 'user_agent']
     list_select_related = ['book', 'user']
     date_hierarchy = 'occurred_at'
     change_list_template = 'admin/library/pagevisit/change_list.html'
+    change_form_template = 'admin/library/pagevisit/change_form.html'
     readonly_fields = [field.name for field in PageVisit._meta.fields]
     actions = None
 
@@ -281,7 +282,21 @@ class PageVisitAdmin(admin.ModelAdmin):
 
     def get_urls(self):
         from django.urls import path
-        return [path('dashboard/', self.admin_site.admin_view(self.dashboard), name='library_pagevisit_dashboard')] + super().get_urls()
+        return [path('dashboard/', self.admin_site.admin_view(self.dashboard), name='library_pagevisit_dashboard'),
+                path('export.csv', self.admin_site.admin_view(self.export_csv), name='library_pagevisit_csv')] + super().get_urls()
+
+    def export_csv(self, request):
+        from django.core.exceptions import PermissionDenied
+        from django.contrib.admin.views.main import IncorrectLookupParameters
+        from django.http import HttpResponse, HttpResponseNotAllowed
+        from .statistics_export import visits_csv
+        if not self.has_view_permission(request): raise PermissionDenied
+        if request.method != 'GET': return HttpResponseNotAllowed(['GET'])
+        try:
+            visits = self.get_changelist_instance(request).queryset
+        except (IncorrectLookupParameters, ValueError):
+            return HttpResponse('Некорректные фильтры статистики.', status=400)
+        return visits_csv(visits)
 
     def dashboard(self, request):
         from datetime import timedelta
@@ -304,8 +319,16 @@ class PageVisitAdmin(admin.ModelAdmin):
             openings=Count('pk', filter=Q(kind='book_open')), turns=Count('pk', filter=Q(kind='book_page')),
             videos=Count('pk', filter=Q(kind='video'))).order_by('-openings', '-turns')[:20]
         pages = visits.values('path').annotate(total=Count('pk')).order_by('-total')[:20]
+        cities = visits.exclude(city='').values('city', 'region', 'country').annotate(total=Count('pk')).order_by('-total')[:20]
+        from urllib.parse import urlencode
+        from django.urls import reverse
+        from .geolocation import available
+        export_filters = {'occurred_at__gte':(timezone.now()-timedelta(days=days)).isoformat()}
+        if not include_bots: export_filters['is_bot__exact'] = '0'
         return TemplateResponse(request, 'admin/library/pagevisit/dashboard.html', {
             **self.admin_site.each_context(request), 'title': 'Посещения сайта и просмотры книг',
             'opts': self.model._meta, 'days': days, 'include_bots': include_bots,
-            'totals': totals, 'daily': daily, 'books': books, 'pages': pages,
+            'totals': totals, 'daily': daily, 'books': books, 'pages': pages, 'cities':cities,
+            'geoip_available':available(),
+            'export_url':reverse('admin:library_pagevisit_csv')+'?'+urlencode(export_filters),
         })

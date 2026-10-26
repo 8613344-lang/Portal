@@ -1,0 +1,3 @@
+qicko.ru {
+    import portal_app qicko-app:8000
+}

@@ -1,11 +1,13 @@
 {% extends base_template %}{% block title %}{{ book.title }} · Видео{% endblock %}
 {% block content %}
-<section class="video-page" data-book-video data-video-revision="{{ video.revision }}" data-status-url="{% url 'book-video-status' book.slug %}" {% if can_read_source %}data-pdf-url="{% url 'book-export' book.slug 'pdf' %}"{% endif %} data-video-url="{% url 'book-video' book.slug %}">
+<section class="video-page" data-book-video data-book-id="{{ book.pk }}" data-account="{% if user.is_authenticated %}{{ user.pk }}{% else %}guest{% endif %}" {% if user.is_authenticated %}data-position-url="{% url 'book-video-position' book.slug %}"{% endif %} data-video-revision="{{ video.revision }}" data-status-url="{% url 'book-video-status' book.slug %}" {% if can_read_source %}data-pdf-url="{% url 'book-export' book.slug 'pdf' %}"{% endif %} data-video-url="{% url 'book-video' book.slug %}">
+  {% if user.is_authenticated %}<form hidden class="video-position-auth">{% csrf_token %}</form>{% endif %}
   {% if can_read_source %}<a class="text-link" href="{% url 'reader' book.slug %}{% if app_mode %}?app=1&amp;device={{ device }}{% endif %}">← Читать книгу</a>{% endif %}
   <h1>{{ book.title }} · Видео</h1>
   <p>MP4 с иллюстрациями, текстом и загруженной озвучкой. Обложка и последняя страница тоже включаются.</p>
   <video class="book-video" controls playsinline preload="metadata" {% if not video.file %}hidden{% else %}src="{{ video.file }}"{% endif %}></video>
   <div class="video-progress" role="status">Проверяем видео…</div>
+  <p class="video-resume" data-video-resume hidden><span></span> <button class="text-link" type="button" data-video-restart>Начать сначала</button></p>
   <div class="video-actions"><a class="button primary video-download" {% if not video.file %}hidden{% else %}href="{{ video.file }}?download=1"{% endif %}>Скачать MP4</a></div>
   {% if can_manage_video %}<form class="video-actions video-create" method="post" action="{% url 'book-video-create' book.slug %}">
     {% csrf_token %}
