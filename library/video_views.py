@@ -1,10 +1,11 @@
 import json
 import math
 import re
-from django.db import transaction
+from django.db.models import Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
 from .models import Book, VideoPosition
@@ -95,14 +96,13 @@ def position(request, slug):
         if type(sequence) is not int or not 1 <= sequence <= 2**53-1: raise ValueError
     except (ValueError, TypeError, KeyError, UnicodeDecodeError, OverflowError):
         return JsonResponse({'error': 'Некорректная позиция видео.'}, status=400)
-    with transaction.atomic():
-        row, _ = VideoPosition.objects.get_or_create(user=request.user, book=book,
-            defaults={'revision': revision, 'client_id': client})
-        row = VideoPosition.objects.select_for_update().get(pk=row.pk)
-        # An older request from the same tab must not overwrite a later pagehide save.
-        if row.revision != revision or row.client_id != client or sequence > row.sequence:
-            row.revision, row.position, row.client_id, row.sequence = revision, seconds, client, sequence
-            row.save()
+    row, _ = VideoPosition.objects.get_or_create(user=request.user, book=book,
+        defaults={'revision': revision, 'client_id': client})
+    # A single conditional write also avoids SQLite read-to-write lock upgrades.
+    newer = ~Q(revision=revision) | ~Q(client_id=client) | Q(sequence__lt=sequence)
+    VideoPosition.objects.filter(pk=row.pk).filter(newer).update(
+        revision=revision, position=seconds, client_id=client, sequence=sequence, updated_at=timezone.now())
+    row.refresh_from_db()
     return JsonResponse({'account': str(request.user.pk), 'position': row.position})
 
 

@@ -8,7 +8,7 @@
   const key = `qicko-video-position-v1:${account}:${panel.dataset.bookId}`;
   const client = Date.now().toString(36) + '_' + Math.random().toString(36).slice(2);
   let revision = null, loaded = false, interacted = false, sequence = 0, lastSaved = 0;
-  let candidate = null, generation = 0, canSync = true, waiting = false;
+  let candidate = null, generation = 0, canSync = true, waiting = false, restoring = false, lastPosition = null;
   const read = () => { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } };
   const store = data => { try { localStorage.setItem(key, JSON.stringify(data)); } catch {} };
   const valid = data => data && data.revision === revision && Number.isFinite(data.position) && data.position > 0;
@@ -17,16 +17,20 @@
     loaded = true;
     const seconds = Math.min(candidate.position, player.duration);
     if (seconds >= player.duration) return;
+    restoring = true;
+    lastPosition = seconds;
     player.currentTime = seconds;
     note.hidden = false;
     const minutes = Math.floor(seconds/60), rest = Math.floor(seconds%60).toString().padStart(2, '0');
     note.querySelector('span').textContent = `Продолжено с ${minutes}:${rest}.`;
   }
   function save(force = false, reset = false) {
-    if (!revision || (!loaded && !interacted) || !Number.isFinite(player.duration) || player.duration <= 0) return;
+    if (!revision || !interacted || !Number.isFinite(player.duration) || player.duration <= 0) return;
     if (!force && performance.now()-lastSaved < 5000) return;
     lastSaved = performance.now();
     const seconds = reset || player.ended ? 0 : player.currentTime;
+    if (lastPosition !== null && Math.abs(lastPosition-seconds) < .05) return;
+    lastPosition = seconds;
     const data = {revision, position: Math.max(0, seconds), updated_at: new Date().toISOString()};
     store(data);
     if (url && csrf && canSync) {
@@ -39,6 +43,7 @@
   panel.addEventListener('video-revision', async event => {
     if (revision === event.detail) return;
     revision = event.detail; generation++; loaded = false; interacted = false; candidate = read();
+    restoring = false; lastPosition = null;
     note.hidden = true;
     const version = generation;
     waiting = false;
@@ -62,13 +67,16 @@
   });
   player.addEventListener('loadedmetadata', resume);
   player.addEventListener('play', () => { interacted = true; });
-  player.addEventListener('seeking', () => { interacted = true; });
+  player.addEventListener('seeking', () => { if (!restoring) interacted = true; });
   player.addEventListener('timeupdate', () => save());
   player.addEventListener('pause', () => save(true));
-  player.addEventListener('seeked', () => { if (!player.seeking) save(true); });
+  player.addEventListener('seeked', () => {
+    if (restoring) { restoring = false; return; }
+    if (!player.seeking) save(true);
+  });
   player.addEventListener('ended', () => { save(true, true); note.hidden = true; });
   panel.querySelector('[data-video-restart]').addEventListener('click', () => {
-    loaded = true; interacted = true; player.currentTime = 0; note.hidden = true; save(true, true);
+    loaded = true; interacted = true; restoring = false; player.currentTime = 0; note.hidden = true; save(true, true);
   });
   document.addEventListener('visibilitychange', () => { if (document.hidden) save(true); });
   window.addEventListener('pagehide', () => save(true));
