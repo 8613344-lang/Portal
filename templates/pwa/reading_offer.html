@@ -1,0 +1,8 @@
+{% load static %}
+<div data-reading-end{% if not reading_end %} hidden{% endif %}>
+  <aside class="install-offer" data-install-offer hidden aria-label="Добавить сайт на главный экран">
+    <img src="{% static 'pwa/icon-192.png' %}" alt="" width="48" height="48" loading="lazy">
+    <div><strong>Ваши книги — под рукой</strong><p>Добавьте ярлык, чтобы возвращаться к историям с телефона или планшета.</p><a href="{% url 'install' %}" data-install-trigger>Как добавить <span aria-hidden="true">↗</span></a></div>
+    <button type="button" data-install-dismiss aria-label="Скрыть предложение на неделю">×</button>
+  </aside>
+</div>

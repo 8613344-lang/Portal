@@ -1,0 +1,6 @@
+{% include 'library/order_field.html' with field=brief.child_name %}
+{% include 'library/order_field.html' with field=brief.child_age %}
+{% include 'library/order_field.html' with field=brief.occasion %}
+<div data-custom-occasion{% if brief.event.errors %} data-has-error{% endif %}>
+  {% include 'library/order_field.html' with field=brief.event %}
+</div>

@@ -1,6 +1,7 @@
 (() => {
   'use strict';
   const offer = document.querySelector('[data-install-offer]');
+  const readingEnd = document.querySelector('[data-reading-end]');
   const page = document.querySelector('[data-install-page]');
   const action = document.querySelector('[data-install-action]');
   const status = document.querySelector('[data-install-status]');
@@ -10,7 +11,7 @@
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const nativeApp = /PortalBooks\/|; wv\)/.test(navigator.userAgent);
   const key = 'qicko-install-dismiss-until';
-  let prompt = null, installed = false, busy = false, hiddenUntil = 0;
+  let prompt = null, installed = false, busy = false, hiddenUntil = 0, reachedEnd = false;
   const isInstalled = () => standalone.matches || navigator.standalone === true || installed;
   const dismissed = () => {
     if (hiddenUntil > Date.now()) return true;
@@ -21,7 +22,7 @@
     try { localStorage.setItem(key, String(hiddenUntil)); } catch {}
   };
   function update() {
-    if (offer) offer.hidden = !mobile.matches || nativeApp || isInstalled() || dismissed();
+    if (offer) offer.hidden = !reachedEnd || !mobile.matches || nativeApp || isInstalled() || dismissed();
     document.querySelectorAll('[data-install-trigger]').forEach(link => {
       link.firstChild.textContent = prompt ? 'Установить ' : 'Как добавить ';
     });
@@ -73,6 +74,15 @@
   standalone.addEventListener?.('change', update);
   mobile.addEventListener?.('change', update);
   window.addEventListener('pageshow', update);
+  if (readingEnd && 'IntersectionObserver' in window) {
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting || document.body.classList.contains('book-focus')) return;
+      reachedEnd = true;
+      observer.disconnect();
+      update();
+    }, {rootMargin: '0px 0px -100px 0px'});
+    observer.observe(readingEnd);
+  }
   update();
   if ('serviceWorker' in navigator && window.isSecureContext && !nativeApp) {
     navigator.serviceWorker.register('/service-worker.js', {scope: '/', updateViaCache: 'none'}).catch(() => {

@@ -70,6 +70,7 @@
         {% if can_edit %}<details class="audio-edit"><summary>{% if current.audio %}Заменить запись{% else %}Добавить MP3 / WAV{% endif %}</summary><form method="post" action="{{ audio_action }}" enctype="multipart/form-data">{% csrf_token %}{{ audio_form.as_p }}<p class="muted">MP3 или WAV до 100 МБ. Запись сохранится для всех читателей этой книги.</p><button class="button primary">Сохранить запись</button></form>{% if current.audio %}<form method="post" action="{{ audio_action }}">{% csrf_token %}<input type="hidden" name="action" value="remove"><button class="text-link danger">Удалить запись</button></form>{% endif %}</details>{% endif %}
       </section>
       <nav class="page-navigation" aria-label="Страницы книги">{% if number > 1 %}<a class="button secondary" href="{% querystring page=previous %}">← Предыдущая</a>{% else %}<span></span>{% endif %}<span>{{ number }} / {{ total }}</span>{% if number < total %}<a class="button primary" href="{% querystring page=next %}">Следующая →</a>{% else %}<a class="button secondary" href="{% url 'catalog' %}">Другие истории ↗</a>{% endif %}</nav>
+      {% if offer_after_reading %}{% if number == total %}{% include 'pwa/reading_offer.html' with reading_end=True %}{% else %}{% include 'pwa/reading_offer.html' %}{% endif %}{% endif %}
     </div>
   </div>
   {% else %}<div class="empty">Страницы этой книги ещё готовятся.</div>{% endif %}

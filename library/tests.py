@@ -567,7 +567,7 @@ class PlatformTests(TestCase):
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response['Retry-After'], '10')
     def order_data(self):
-        return {'parent_name': 'Родитель', 'email': 'parent@example.com', 'child_name': 'Дима', 'child_age': '3', 'child_description': 'Любит строить', 'event': 'Первый поход', 'wishes': '', 'consent': 'on'}
+        return {'parent_name': 'Родитель', 'email': 'parent@example.com', 'child_name': 'Дима', 'child_age': '3', 'child_description': 'Любит строить', 'occasion': 'Другое', 'event': 'Первый поход', 'wishes': '', 'consent': 'on'}
     def submit(self, **extra):
         self.client.get(reverse('order'))
         data = self.order_data() | {'submission_key': self.client.session['order_tokens'][-1]} | extra

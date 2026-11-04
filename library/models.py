@@ -145,16 +145,20 @@ class Order(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     submission_key = models.UUIDField(unique=True, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, verbose_name='Заказчик')
-    parent_name = models.CharField('Имя родителя', max_length=120)
+    parent_name = models.CharField('Ваше имя', max_length=120)
     email = models.EmailField('Email')
     contact = models.CharField('Дополнительная связь', max_length=160, blank=True)
     child_name = models.CharField('Имя ребёнка', max_length=100)
     child_age = models.PositiveSmallIntegerField('Возраст')
-    child_description = models.TextField('О ребёнке')
+    child_description = models.TextField('О ребёнке', blank=True)
     event = models.TextField('Событие / тема')
     wishes = models.TextField('Пожелания', blank=True)
     photo = models.FileField('Фото ребёнка', upload_to=private_path, blank=True)
     consent = models.BooleanField('Согласие на обработку', default=False)
+    consent_version = models.CharField('Версия согласия', max_length=64, blank=True, editable=False)
+    pricing = models.JSONField('Выбранный тариф и доплаты, ₽', default=dict, blank=True, editable=False)
+    qualified_at = models.DateTimeField('Заявка квалифицирована', null=True, blank=True, editable=False)
+    paid_at = models.DateTimeField('Оплата подтверждена', null=True, blank=True, editable=False)
     status = models.CharField('Статус', max_length=20, choices=[('new', 'Новая'), ('in_progress', 'В работе'), ('review', 'На согласовании'), ('ready', 'Готова'), ('completed', 'Завершена'), ('cancelled', 'Отменена')], default='new', db_index=True)
     book = models.ForeignKey(Book, null=True, blank=True, on_delete=models.SET_NULL, verbose_name='Готовая книга')
     manager = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name='managed_orders', verbose_name='Менеджер', limit_choices_to={'is_staff': True})
@@ -165,6 +169,92 @@ class Order(models.Model):
         verbose_name_plural = 'Заказы'
     def __str__(self): return f'Заказ {str(self.id)[:8]} — {self.parent_name}'
     def clean(self): self.photo = normalize_image(self.photo)
+
+
+class BookTariff(models.Model):
+    title = models.CharField('Название', max_length=100)
+    price = models.PositiveIntegerField('Цена PDF или подписки, ₽')
+    reference_price = models.PositiveIntegerField('Обычная цена, ₽', null=True, blank=True)
+    text_pages = models.PositiveSmallIntegerField('Страниц текста', null=True, blank=True)
+    picture_pages = models.PositiveSmallIntegerField('Страниц иллюстраций', null=True, blank=True)
+    audio_price = models.PositiveIntegerField('Доплата за озвучку, ₽', null=True, blank=True)
+    print_price = models.PositiveIntegerField('Доплата за мягкую обложку, ₽', null=True, blank=True)
+    book_count = models.PositiveSmallIntegerField('Книг в подписке', null=True, blank=True)
+    months = models.PositiveSmallIntegerField('Срок подписки, месяцев', null=True, blank=True)
+    position = models.PositiveSmallIntegerField('Порядок', default=10)
+    enabled = models.BooleanField('Показывать на сайте', default=True)
+
+    class Meta:
+        ordering = ['position', 'pk']
+        verbose_name = 'Тариф'
+        verbose_name_plural = 'Тарифы на книги'
+
+    def __str__(self):
+        return self.title
+
+    @property
+    def total_pages(self):
+        return (self.text_pages or 0) + (self.picture_pages or 0)
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.reference_price is not None and self.reference_price <= self.price:
+            raise ValidationError({'reference_price': 'Обычная цена должна быть выше текущей.'})
+        if self.book_count is not None and not self.book_count:
+            raise ValidationError({'book_count': 'Укажите хотя бы одну книгу.'})
+        if self.months is not None and not self.months:
+            raise ValidationError({'months': 'Укажите хотя бы один месяц.'})
+        if (self.book_count is None) != (self.months is None):
+            raise ValidationError('Укажите и количество книг, и срок подписки.')
+
+
+class LegalDocument(models.Model):
+    class Kind(models.TextChoices):
+        CONSENT = 'consent', 'Согласие на обработку персональных данных'
+        POLICY = 'policy', 'Политика компании в отношении обработки персональных данных'
+        OFFER = 'offer', 'Договор-оферта'
+
+    kind = models.CharField('Тип', max_length=12, choices=Kind.choices, unique=True)
+    title = models.CharField('Заголовок', max_length=200)
+    content = models.TextField('Текст', blank=True, help_text='Оставьте пустым, пока документ не готов к публикации. Пустая строка разделяет абзацы.')
+    updated_at = models.DateTimeField('Последнее изменение', auto_now=True)
+
+    class Meta:
+        verbose_name = 'Документ сайта'
+        verbose_name_plural = 'Документы сайта'
+
+    def __str__(self):
+        return self.title
+
+    def get_absolute_url(self):
+        from django.urls import reverse
+        return reverse('legal-document', args=[self.kind])
+
+    @property
+    def fingerprint(self):
+        from hashlib import sha256
+        return sha256(f'{self.title}\n{self.content}'.encode()).hexdigest() if self.content else ''
+
+
+class OrderFunnelEvent(models.Model):
+    class Kind(models.TextChoices):
+        START = 'start', 'Начало формы'
+        DETAILS = 'details', 'Переход к контактам'
+        ERROR = 'error', 'Ошибка заполнения'
+        SUBMITTED = 'submitted', 'Заявка отправлена'
+        QUALIFIED = 'qualified', 'Заявка квалифицирована'
+        PAID = 'paid', 'Оплата подтверждена'
+
+    submission_key = models.UUIDField(editable=False)
+    kind = models.CharField('Событие', max_length=12, choices=Kind.choices)
+    error_fields = models.CharField('Поля с ошибкой', max_length=250, blank=True)
+    occurred_at = models.DateTimeField('Время', auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-occurred_at']
+        verbose_name = 'Событие заявки'
+        verbose_name_plural = 'Воронка заказов'
+        constraints = [models.UniqueConstraint(fields=['submission_key', 'kind'], condition=~Q(kind='error'), name='order_funnel_unique_milestone')]
 
 class NotificationRecipient(models.Model):
     name = models.CharField('Имя получателя', max_length=100)

@@ -4,10 +4,10 @@
 <section class="magic-hero">
   <div class="magic-hero-copy">
     <p class="hero-kicker"><span aria-hidden="true">✦</span> Маленький человек. Большая история.</p>
-    <h1>В этой сказке<br>главный герой —<br><em>ваш ребёнок.</em></h1>
-    <p class="hero-description">Превратим его мечты, открытия и приключения в&nbsp;персональную книгу. Чтобы читать перед сном, слушать вместе и бережно хранить детство.</p>
-    <div class="magic-hero-actions"><a class="button primary" href="{% url 'order' %}">Создать свою книгу <span aria-hidden="true">↗</span></a><a class="button quiet" href="{% url 'web-shelf' %}"><span class="tiny-play" aria-hidden="true">▷</span> Открыть книжную полку</a></div>
-    <div class="hero-benefits"><span><i aria-hidden="true">✓</i> История о вашем ребёнке</span><span><i aria-hidden="true">✓</i> Иллюстрации и аудио</span></div>
+    <h1>Ваш ребёнок&nbsp;— <em>герой сказки.</em></h1>
+    <p class="hero-description">Создадим именную сказку с иллюстрациями в PDF. По желанию добавим озвучку или напечатаем книгу.</p>
+    <div class="magic-hero-actions"><a class="button primary" href="{% url 'order' %}">Создать свою книгу <span aria-hidden="true">↗</span></a><a class="button quiet" href="{% url 'sample-book' %}"><span class="tiny-play" aria-hidden="true">▷</span> Открыть образец</a></div>
+    <p class="hero-cta-note">Заявка без регистрации и оплаты</p>
   </div>
   <div class="magic-hero-art">
     <span class="hero-sticker"><span aria-hidden="true">♡</span> Его имя. Его мир. Его книга.</span>
@@ -27,7 +27,7 @@
     <span class="art-caption">Немного волшебства. Очень много любви.</span>
   </div>
 </section>
-<section class="offer-banner" aria-labelledby="offer-title"><span class="offer-seal" aria-hidden="true">✦</span><div><span class="offer-label">{{ promotion.eyebrow }}</span><h2 id="offer-title">{{ promotion.title }}</h2><p>{{ promotion.text|linebreaksbr }}</p></div><a class="button offer-button" href="{% url 'order' %}">Хочу свою сказку <span aria-hidden="true">↗</span></a><span class="offer-doodle" aria-hidden="true">✧</span></section>
+{% include 'library/tariffs.html' %}
 <section id="how-it-works" class="how-section"><div class="center-heading"><p class="eyebrow">ИЗ МАЛЕНЬКИХ МОМЕНТОВ — В БОЛЬШУЮ ИСТОРИЮ</p><h2>Волшебство начинается с вас</h2></div><div class="how-grid"><article><span class="step-icon step-yellow" aria-hidden="true">♡</span><div><span class="step-number">01 / ЗНАКОМИМСЯ</span><h3>Расскажите о ребёнке</h3><p>Любимые игрушки, характер и мечты. Выберите событие, которое хочется сохранить. Фото — по желанию.</p></div></article><article><span class="step-icon step-blue" aria-hidden="true">✎</span><div><span class="step-number">02 / СОЧИНЯЕМ</span><h3>Создадим его маленький мир</h3><p>Подготовим историю и иллюстрации. Обсудим ваши пожелания и согласуем детали книги.</p></div></article><article><span class="step-icon step-lilac" aria-hidden="true">♫</span><div><span class="step-number">03 / СОХРАНЯЕМ</span><h3>Читайте. Слушайте. Обнимайтесь.</h3><p>Книга будет в личном кабинете. Листайте страницы, слушайте добавленную озвучку и возвращайтесь к любимым моментам.</p></div></article></div></section>
 <section class="section home-samples" id="book-samples"><div class="section-heading"><div><p class="eyebrow">ДЛЯ ВДОХНОВЕНИЯ</p><h2>А какая история будет у вас?</h2><p class="section-description">Полистайте готовую книгу или выберите идею для своей.</p></div><a class="text-link" href="{% url 'catalog' %}">Истории наших читателей <span aria-hidden="true">↗</span></a></div>
   <div class="book-grid inspiration-grid">

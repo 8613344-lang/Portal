@@ -10,9 +10,10 @@ from django.http import FileResponse, Http404, HttpResponse, StreamingHttpRespon
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods, require_POST
-from .forms import OrderForm, PageAudioForm
+from .forms import ChildBriefForm, OrderForm, PageAudioForm
 from .models import Book, BookPage, Notification, NotificationRecipient, Order
-from .models import UserAgreement, HomepagePromotion, AudioPreview, HomepageItem
+from .models import UserAgreement, AudioPreview, HomepageItem, BookTariff, LegalDocument, OrderFunnelEvent
+from .commerce import commerce_context, record_funnel
 from .sheets import book_sheets, ending_qrs, reader_spread
 from django.urls import reverse
 from .seo import home_metadata, set_metadata
@@ -44,7 +45,7 @@ def home(request):
             Q(kind='idea') | Q(kind='book', book__status='published', book__visibility='public')
         ).select_related('book__cover_page'),
         'audio_previews': audio_previews,
-        'promotion': HomepagePromotion.objects.filter(pk=1).first() or HomepagePromotion(),
+        **commerce_context(),
     })
 
 def catalog(request):
@@ -101,7 +102,8 @@ def reader(request, slug, shared=False):
     audio_action = reverse('page-audio', args=[current.pk]) if current.kind == 'story' else reverse('sheet-audio', args=[book.slug, current.kind])
     app_mode = request.GET.get('app') == '1'
     shelf_mode = request.GET.get('shelf') == '1' and not app_mode
-    return render(request, 'library/reader.html', {'book': book, 'shared': shared or app_mode or shelf_mode, 'app_mode': app_mode, 'shelf_mode': shelf_mode, 'shelf_return_url': reverse('web-shelf') if shelf_mode else '', 'device': 'tablet' if request.GET.get('device') == 'tablet' else 'phone', 'base_template': 'app_base.html' if app_mode else 'base.html', 'pages': pages, 'current': current, 'spread': reader_spread(book, pages, number), 'number': number, 'total': len(pages), 'previous': number - 1, 'next': number + 1, 'can_edit': can_edit, 'audio_form': PageAudioForm(), 'audio_action':audio_action, 'ending_qrs': ending_qrs(book) if current.kind == 'ending' else [], 'audio_count': sum(bool(p.audio) for p in pages)})
+    return render(request, 'library/reader.html', {'book': book, 'shared': shared or app_mode or shelf_mode, 'app_mode': app_mode, 'shelf_mode': shelf_mode, 'shelf_return_url': reverse('web-shelf') if shelf_mode else '', 'device': 'tablet' if request.GET.get('device') == 'tablet' else 'phone', 'base_template': 'app_base.html' if app_mode else 'base.html', 'pages': pages, 'current': current, 'spread': reader_spread(book, pages, number), 'number': number, 'total': len(pages), 'previous': number - 1, 'next': number + 1, 'can_edit': can_edit, 'audio_form': PageAudioForm(), 'audio_action':audio_action, 'ending_qrs': ending_qrs(book) if current.kind == 'ending' else [], 'audio_count': sum(bool(p.audio) for p in pages),
+        'offer_after_reading': not app_mode and book.status == 'published' and book.visibility == 'public' and len(pages) > 1})
 
 @never_cache
 @require_http_methods(['GET'])
@@ -178,42 +180,104 @@ def sheet_audio(request, slug, kind):
 @require_http_methods(['GET', 'POST'])
 def order_create(request):
     set_metadata(request, 'Заказать персональную книгу для ребёнка — Книги рядом',
-        'Оставьте заявку на именную сказку: расскажите о ребёнке, событии и пожеланиях. '
-        'Фото необязательно. Обсудим историю, иллюстрации, озвучку и стоимость.', reverse('order'))
+        'Оставьте заявку на именную сказку без регистрации и оплаты. '
+        'Начните с имени, возраста ребёнка и повода.', reverse('order'))
     tokens = request.session.get('order_tokens', [])
+    tariffs = list(BookTariff.objects.filter(enabled=True))
+    initial = {'parent_name': request.user.first_name, 'email': request.user.email} if request.user.is_authenticated else {}
+    selected = request.GET.get('tariff', '') if request.method == 'GET' else request.POST.get('preferred_tariff', '')
+    if selected not in {str(tariff.pk) for tariff in tariffs}:
+        selected = ''
+    initial['tariff'] = selected
+    brief = ChildBriefForm()
+    form = OrderForm(tariffs=tariffs, initial=initial)
+    step = 1
+    consent = LegalDocument.objects.filter(kind=LegalDocument.Kind.CONSENT).first()
+    consent_version = consent.fingerprint if consent else ''
+    kinds = OrderFunnelEvent.Kind
     if request.method == 'POST':
         token = request.POST.get('submission_key', '')
         if token not in tokens:
             return HttpResponse('Форма устарела. Откройте страницу заказа ещё раз.', status=400)
         existing = Order.objects.filter(submission_key=token).first()
         if existing:
+            record_funnel(token, kinds.SUBMITTED)
             request.session['last_order'] = str(existing.id)
             return redirect('order-success')
-        form = OrderForm(request.POST, request.FILES)
-        if form.is_valid():
-            with transaction.atomic():
-                order = form.save(commit=False)
-                order.submission_key = uuid.UUID(token)
-                order.user = request.user if request.user.is_authenticated else None
-                defaults = {field.name: getattr(order, field.name) for field in Order._meta.fields if field.name not in ['id', 'submission_key', 'created_at']}
-                order, created = Order.objects.get_or_create(submission_key=order.submission_key, defaults=defaults)
-                if created:
-                    for recipient in NotificationRecipient.objects.filter(active=True).select_related('employee'):
-                        if recipient.allowed():
-                            Notification.objects.create(order=order, recipient=recipient, destination=recipient.destination, channel=recipient.channel)
-            request.session['last_order'] = str(order.id)
-            return redirect('order-success')
+        record_funnel(token, kinds.START)
+        brief = ChildBriefForm(request.POST)
+        brief_valid = brief.is_valid()
+        if request.POST.get('stage') == 'brief':
+            if brief_valid:
+                step = 2
+                record_funnel(token, kinds.DETAILS)
+            else:
+                record_funnel(token, kinds.ERROR, brief.errors)
+        else:
+            step = 2
+            form = OrderForm(request.POST, request.FILES, tariffs=tariffs)
+            form.is_valid()
+            if request.POST.get('consent_version', '') != consent_version:
+                form.add_error('consent', 'Согласие обновилось. Откройте новую редакцию и подтвердите её.')
+                form.data = form.data.copy()
+                form.data.pop('consent', None)
+            if brief_valid:
+                record_funnel(token, kinds.DETAILS)
+            if brief_valid and not form.errors:
+                with transaction.atomic():
+                    order = form.save(commit=False)
+                    order.submission_key = uuid.UUID(token)
+                    order.user = request.user if request.user.is_authenticated else None
+                    order.child_name = brief.cleaned_data['child_name']
+                    order.child_age = brief.cleaned_data['child_age']
+                    order.event = brief.event_name
+                    order.pricing = form.pricing_snapshot()
+                    order.consent_version = consent_version
+                    defaults = {field.name: getattr(order, field.name) for field in Order._meta.fields if field.name not in ['id', 'submission_key', 'created_at']}
+                    order, created = Order.objects.get_or_create(submission_key=order.submission_key, defaults=defaults)
+                    if created:
+                        for recipient in NotificationRecipient.objects.filter(active=True).select_related('employee'):
+                            if recipient.allowed():
+                                Notification.objects.create(order=order, recipient=recipient, destination=recipient.destination, channel=recipient.channel)
+                    record_funnel(token, kinds.SUBMITTED)
+                request.session['last_order'] = str(order.id)
+                return redirect('order-success')
+            record_funnel(token, kinds.ERROR, {*brief.errors, *form.errors})
     else:
         token = str(uuid.uuid4())
         request.session['order_tokens'] = (tokens + [token])[-20:]
-        form = OrderForm(initial={'parent_name': request.user.first_name, 'email': request.user.email} if request.user.is_authenticated else None)
-    return render(request, 'library/order.html', {'form': form, 'submission_key': token})
+    return render(request, 'library/order.html', {
+        'brief': brief, 'form': form, 'submission_key': token, 'step': step, 'preferred_tariff': selected,
+        'consent_version': consent_version, 'order_tracking': settings.ANALYTICS_ENABLED,
+        **commerce_context(tariffs),
+    })
+
+
+@require_POST
+@never_cache
+def order_start(request):
+    token = request.POST.get('submission_key', '')
+    if token not in request.session.get('order_tokens', []):
+        return HttpResponse(status=400)
+    record_funnel(token, OrderFunnelEvent.Kind.START)
+    return HttpResponse(status=204)
 
 @never_cache
 def order_success(request):
     order_id = request.session.get('last_order')
     if not order_id: return redirect('order')
-    return render(request, 'library/order_success.html', {'order_id': order_id})
+    return render(request, 'library/order_success.html', {'order_id': order_id, **commerce_context([])})
+
+
+@require_http_methods(['GET', 'HEAD'])
+def legal_document(request, kind):
+    document = get_object_or_404(LegalDocument, kind=kind)
+    return render(request, 'library/legal_document.html', {'document': document})
+
+
+@require_http_methods(['GET', 'HEAD'])
+def sample_book(request):
+    return render(request, 'library/sample_book.html')
 
 @never_cache
 def privacy(request):

@@ -158,6 +158,8 @@ if (reader && document.querySelector('#page-only')) {
         reader.querySelector(selector).replaceWith(incoming.querySelector(selector));
       }
       for (const key of ['number','total','focusPrevious','focusNext','focusLabel']) reader.dataset[key] = incoming.dataset[key];
+      const readingEnd = reader.querySelector('[data-reading-end]');
+      if (readingEnd) readingEnd.hidden = Number(reader.dataset.number) !== Number(reader.dataset.total);
       history.replaceState(null, '', url);
       changing = false;
       controller = null;

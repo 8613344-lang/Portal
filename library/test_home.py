@@ -9,7 +9,7 @@ from django.forms import modelform_factory
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from .models import AudioPreview, Book, BookPage, HomepagePromotion
+from .models import AudioPreview, Book, BookPage, BookTariff, HomepagePromotion
 
 
 def preview_wav(name='preview.wav'):
@@ -117,7 +117,7 @@ class HomepageSettingsTests(TestCase):
         self.assertNotContains(response, 'book/private.mp3')
         self.assertNotContains(response, 'bookpage/private.wav')
 
-    def test_missing_settings_render_five_slots_and_default_promotion_without_public_get_writes(self):
+    def test_missing_legacy_promotion_does_not_affect_public_tariffs_or_previews(self):
         AudioPreview.objects.all().delete()
         HomepagePromotion.objects.all().delete()
         response = self.client.get(reverse('home'))
@@ -125,8 +125,8 @@ class HomepageSettingsTests(TestCase):
         previews = response.context['audio_previews']
         self.assertEqual([item['position'] for item in previews], [1, 2, 3, 4, 5])
         self.assertTrue(all(not item['available'] for item in previews))
-        self.assertContains(response, 'Хороший повод начать')
-        self.assertContains(response, 'Скидка на создание книги сейчас!')
+        self.assertContains(response, 'Тарифы')
+        self.assertNotContains(response, 'Скидка на создание книги сейчас!')
         self.assertEqual(AudioPreview.objects.count(), 0)
         self.assertEqual(HomepagePromotion.objects.count(), 0)
 
@@ -283,7 +283,7 @@ class HomepageSettingsTests(TestCase):
         with self.assertRaises(IntegrityError), transaction.atomic():
             HomepagePromotion.objects.bulk_create([HomepagePromotion(pk=2, title='Лишний баннер')])
 
-    def test_promotion_admin_updates_all_three_texts_on_home_immediately(self):
+    def test_legacy_promotion_edits_do_not_override_current_public_tariffs(self):
         self.staff_with_permissions('homepagepromotion', 'change_homepagepromotion')
         url = reverse('admin:library_homepagepromotion_change', args=[1])
         response = self.client.post(url, {
@@ -298,22 +298,18 @@ class HomepageSettingsTests(TestCase):
         self.assertIsNotNone(self.promotion.updated_at)
         self.client.logout()
         response = self.client.get(reverse('home'))
-        self.assertContains(response, 'Для новой семейной традиции')
-        self.assertContains(response, 'Ваш особенный повод')
-        self.assertContains(response, 'Расскажите нам о своей идее.')
+        self.assertNotContains(response, 'Для новой семейной традиции')
+        self.assertNotContains(response, 'Ваш особенный повод')
+        self.assertNotContains(response, 'Расскажите нам о своей идее.')
 
-    def test_promotion_and_preview_texts_are_escaped(self):
-        self.promotion.eyebrow = '<script>badEyebrow()</script>'
-        self.promotion.title = '<script>badTitle()</script>'
-        self.promotion.text = '<img src=x onerror=badText()>'
-        self.promotion.save()
+    def test_tariff_and_preview_texts_are_escaped(self):
+        BookTariff.objects.filter(price=500).update(title='<script>badTitle()</script>')
         self.preview.title = '<img src=x onerror=badAudio()>'
         self.preview.save(update_fields=['title'])
         response = self.client.get(reverse('home'))
-        for text in ('<script>badEyebrow()</script>', '<script>badTitle()</script>', '<img src=x onerror=badText()>', '<img src=x onerror=badAudio()>'):
+        for text in ('<script>badTitle()</script>', '<img src=x onerror=badAudio()>'):
             self.assertNotContains(response, text)
         self.assertContains(response, '&lt;script&gt;badTitle()&lt;/script&gt;')
-        self.assertContains(response, '&lt;img src=x onerror=badText()&gt;')
         self.assertContains(response, '&lt;img src=x onerror=badAudio()&gt;')
 
     def test_staff_without_promotion_permission_cannot_view_or_edit_promotion(self):

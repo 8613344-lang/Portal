@@ -1,0 +1,12 @@
+{% extends "admin/change_list.html" %}
+{% block result_list %}
+<div class="module">
+  <h2>Этапы по выбранным фильтрам</h2>
+  <table>
+    <thead><tr><th scope="col">Этап</th><th scope="col">Событий</th><th scope="col">Уникальных форм</th></tr></thead>
+    <tbody>{% for label, counts in funnel_counts %}<tr><th scope="row">{{ label }}</th><td>{{ counts.total|default:0 }}</td><td>{{ counts.forms|default:0 }}</td></tr>{% endfor %}</tbody>
+  </table>
+  <p>Каждый этап считается по дате события. У заявки может быть несколько ошибок. Квалификацию и оплату подтверждает менеджер в разделе «Заказы».</p>
+</div>
+{{ block.super }}
+{% endblock %}

@@ -8,7 +8,9 @@ from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import UserChangeForm
 from .models import Book, BookPage, BookAccess, Order, NotificationRecipient, Notification
 from .models import UserAgreement, HomepagePromotion, AudioPreview, BookVideo, HomepageItem, PageVisit
+from .models import BookTariff, LegalDocument, OrderFunnelEvent
 from .forms import BookAdminForm
+from .commerce import mark_orders
 
 admin.site.site_header = 'Книги рядом · управление'
 admin.site.site_title = 'Книги рядом'
@@ -138,12 +140,26 @@ class AccessAdmin(admin.ModelAdmin):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ['id', 'parent_name', 'child_name', 'status', 'manager', 'created_at']
-    list_filter = ['status', 'created_at']
+    list_display = ['id', 'parent_name', 'child_name', 'status', 'manager', 'created_at', 'qualified_at', 'paid_at']
+    list_filter = ['status', 'created_at', ('qualified_at', admin.EmptyFieldListFilter), ('paid_at', admin.EmptyFieldListFilter)]
     search_fields = ['parent_name', 'email', 'child_name', 'id']
     autocomplete_fields = ['book', 'user', 'manager']
-    readonly_fields = ['id', 'submission_key', 'created_at', 'consent']
-    actions = ['grant_book_access']
+    readonly_fields = ['id', 'submission_key', 'created_at', 'consent', 'consent_version', 'pricing_details', 'qualified_at', 'paid_at']
+    actions = ['grant_book_access', 'qualify_orders', 'confirm_payment']
+
+    @admin.display(description='Выбранный тариф и доплаты, ₽')
+    def pricing_details(self, obj):
+        from django.utils.html import format_html_join
+        return format_html_join(' · ', '{}: {}', obj.pricing.items()) if obj and obj.pricing else '—'
+
+    @admin.action(permissions=['change'], description='Отметить заявки как квалифицированные')
+    def qualify_orders(self, request, queryset):
+        self.message_user(request, f'Квалифицировано заявок: {mark_orders(queryset)}.')
+
+    @admin.action(permissions=['change'], description='Подтвердить полученную оплату')
+    def confirm_payment(self, request, queryset):
+        count = mark_orders(queryset, paid=True)
+        self.message_user(request, f'Подтверждено оплат: {count}. Оплата отмечается только у квалифицированных заявок.')
     @admin.action(description='Выдать заказчикам доступ к готовым книгам')
     def grant_book_access(self, request, queryset):
         if not request.user.has_perm('library.add_bookaccess'):
@@ -212,6 +228,59 @@ class HomepagePromotionAdmin(admin.ModelAdmin):
 
     def view_on_site(self, obj):
         return obj.get_absolute_url()
+
+    def changelist_view(self, request, extra_context=None):
+        return super().changelist_view(request, {**(extra_context or {}), 'title': 'Архив баннера главной — действующие цены в разделе «Тарифы на книги»'})
+
+
+@admin.register(BookTariff)
+class BookTariffAdmin(admin.ModelAdmin):
+    list_display = ['title', 'price', 'audio_price', 'print_price', 'book_count', 'position', 'enabled']
+    list_filter = ['enabled']
+
+
+@admin.register(LegalDocument)
+class LegalDocumentAdmin(admin.ModelAdmin):
+    list_display = ['title', 'kind', 'published', 'updated_at']
+    readonly_fields = ['kind', 'updated_at']
+
+    @admin.display(boolean=True, description='Опубликован')
+    def published(self, obj):
+        return bool(obj.content.strip())
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(OrderFunnelEvent)
+class OrderFunnelEventAdmin(admin.ModelAdmin):
+    change_list_template = 'admin/library/orderfunnelevent/change_list.html'
+    list_display = ['kind', 'error_fields', 'occurred_at']
+    list_filter = ['kind', 'occurred_at']
+    date_hierarchy = 'occurred_at'
+    actions = None
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def changelist_view(self, request, extra_context=None):
+        from django.db.models import Count
+        response = super().changelist_view(request, extra_context)
+        if getattr(response, 'context_data', None):
+            queryset = response.context_data['cl'].queryset
+            rows = queryset.order_by().values('kind').annotate(total=Count('pk'), forms=Count('submission_key', distinct=True))
+            counts = {row['kind']: row for row in rows}
+            response.context_data['funnel_counts'] = [(label, counts.get(key, {})) for key, label in OrderFunnelEvent.Kind.choices]
+        return response
 
 
 @admin.register(AudioPreview)

@@ -1,1 +1,67 @@
-{% extends 'base.html' %}{% block title %}{{ seo.title }}{% endblock %}{% block content %}<section class="order-layout"><aside class="order-intro"><p class="eyebrow">НАЧНЁМ С ВАШЕЙ ИСТОРИИ</p><h1>Каким будет<br>ваш <em>маленький герой?</em></h1><p>Расскажите о ребёнке и о моменте, который хочется превратить в сказку. Мы свяжемся с вами по email и обсудим детали.</p><div class="intro-note"><span>♡</span><p>Фото необязательно.<br>Персональные материалы остаются закрытыми.</p></div>{% if not user.is_authenticated %}<p class="muted">Можно заказать без регистрации. <a href="{% url 'login' %}?next={% url 'order' %}">Войдите</a>, чтобы видеть статус в кабинете.</p>{% endif %}</aside><form method="post" enctype="multipart/form-data" class="order-form">{% csrf_token %}<input type="hidden" name="submission_key" value="{{ submission_key }}">{{ form.website }}{% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}<h2>Немного о вас и ребёнке</h2>{% for field in form.visible_fields %}<div class="form-field {% if field.name == 'consent' %}checkbox-field{% endif %}">{% if field.name == 'consent' %}{{ field }}<label for="{{ field.id_for_label }}">{{ field.label }} · <a href="{% url 'privacy' %}" target="_blank" rel="noopener">Подробнее</a></label>{% else %}<label for="{{ field.id_for_label }}">{{ field.label }}{% if field.field.required %}<span class="required"> *</span>{% endif %}</label>{{ field }}{% endif %}{% if field.help_text %}<small>{{ field.help_text }}</small>{% endif %}{{ field.errors }}</div>{% endfor %}<button class="button primary full-width">Отправить заявку ↗</button><p class="form-note">Это заявка на обсуждение книги. Оплата на этом этапе не требуется.</p></form></section>{% endblock %}
+{% extends 'base.html' %}{% load static %}
+{% block extra_head %}<script src="{% static 'order.js' %}" defer></script>{% endblock %}
+{% block content %}
+<section class="order-layout">
+  <header class="order-intro">
+    <h1>Создать свою книгу</h1>
+    <p>Заявка без регистрации и оплаты. {{ response_time }}</p>
+  </header>
+  <form method="post" enctype="multipart/form-data" class="order-form" novalidate
+        {% if step == 1 and order_tracking %}data-start-url="{% url 'order-start' %}"{% endif %}>
+    {% csrf_token %}
+    <input type="hidden" name="submission_key" value="{{ submission_key }}">
+    <input type="hidden" name="preferred_tariff" value="{{ preferred_tariff }}">
+    <input type="hidden" name="stage" value="{% if step == 1 %}brief{% else %}submit{% endif %}">
+    <p class="order-progress">Шаг {{ step }} из 2</p>
+    {% if step == 1 %}
+      <h2>О ребёнке</h2>
+      {% include 'library/brief_fields.html' %}
+      <button class="button primary full-width">Далее: контакты и детали <span aria-hidden="true">→</span></button>
+    {% else %}
+      <h2>Контакты и детали</h2>
+      {{ form.website }}
+      <input type="hidden" name="consent_version" value="{{ consent_version }}">
+      {% if form.errors or brief.errors %}<p class="order-error" role="alert">Проверьте выделенные поля и отправьте заявку ещё раз.</p>{% endif %}
+      {{ form.non_field_errors }}{{ form.website.errors }}
+      <details class="order-detail" {% if brief.errors %}open{% endif %}>
+        <summary>О ребёнке{% if brief.child_name.value and not brief.errors %}: {{ brief.child_name.value }}{% endif %} · изменить</summary>
+        {% include 'library/brief_fields.html' %}
+      </details>
+      {% include 'library/order_field.html' with field=form.parent_name %}
+      {% include 'library/order_field.html' with field=form.email %}
+      <details class="order-detail" {% if form.tariff.errors or form.tariff.value or form.narration.value or form.printed.value or form.hardcover.value %}open{% endif %}>
+        <summary>Тариф и форматы{% if preferred_tariff or form.tariff.value %} · выбран{% endif %}</summary>
+        {% include 'library/order_field.html' with field=form.tariff %}
+        <ul class="order-options" aria-label="Дополнительные опции">
+          <li><label>{{ form.narration }} {{ form.narration.label }} <span data-addon-label="narration"></span></label></li>
+          <li><label>{{ form.printed }} {{ form.printed.label }} <span data-addon-label="printed"></span></label></li>
+          <li><label>{{ form.hardcover }} {{ form.hardcover.label }}</label></li>
+        </ul>
+        <p class="order-estimate" data-order-estimate aria-live="polite" hidden></p>
+        <p class="order-small">{{ delivery_terms }}</p>
+        <a class="order-small" href="#tariffs">Все тарифы ↓</a>
+        {% for tariff in tariffs %}<span hidden data-tariff="{{ tariff.pk }}" data-price="{{ tariff.price }}" data-audio="{{ tariff.audio_price|default_if_none:'' }}" data-print="{{ tariff.print_price|default_if_none:'' }}"></span>{% endfor %}
+      </details>
+      <details class="order-detail" {% if form.contact.errors or form.child_description.errors or form.wishes.errors or form.photo.errors %}open{% endif %}>
+        <summary>Пожелания, фото и дополнительная связь <span>по желанию</span></summary>
+        {% include 'library/order_field.html' with field=form.child_description %}
+        {% include 'library/order_field.html' with field=form.wishes %}
+        {% include 'library/order_field.html' with field=form.photo %}
+        {% include 'library/order_field.html' with field=form.contact %}
+      </details>
+      <div class="form-field checkbox-field">
+        {{ form.consent }}
+        <div><label for="{{ form.consent.id_for_label }}">Подтверждаю <a href="{% url 'legal-document' 'consent' %}" target="_blank" rel="noopener">согласие на обработку персональных данных</a> для работы с заявкой.</label>{{ form.consent.errors }}</div>
+      </div>
+      <p class="order-small order-legal"><a href="{% url 'legal-document' 'policy' %}" target="_blank" rel="noopener">Политика обработки данных</a> · <a href="{% url 'legal-document' 'offer' %}" target="_blank" rel="noopener">Договор-оферта</a></p>
+      <button class="button primary full-width">Отправить заявку <span aria-hidden="true">↗</span></button>
+      <p class="form-note">Оплата только после согласования результата.</p>
+    {% endif %}
+  </form>
+  <aside class="order-reassurance">
+    <p>{{ production_time }}</p><p>{{ review_terms }}</p>
+    <a class="text-link" href="{% url 'sample-book' %}">Открыть наш образец сказки <span aria-hidden="true">↗</span></a>
+  </aside>
+</section>
+{% include 'library/tariffs.html' %}
+{% endblock %}

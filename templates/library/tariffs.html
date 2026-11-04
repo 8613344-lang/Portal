@@ -1,0 +1,27 @@
+{% if tariffs %}
+<section class="section tariffs" id="tariffs" aria-labelledby="tariffs-heading">
+  <div class="section-heading"><div><p class="eyebrow">ПЕРСОНАЛЬНАЯ КНИГА</p><h2 id="tariffs-heading">Тарифы</h2><p class="section-description">Вместе с вами разработаем сюжет и иллюстрации, чтобы главным героем стал ваш ребёнок. {{ production_time }}</p></div></div>
+  <div class="tariff-grid">
+    {% for tariff in tariffs %}
+      <article class="tariff-card">
+        <h3>{{ tariff.title }}</h3>
+        <p class="tariff-price"><strong>{{ tariff.price }} ₽</strong>{% if tariff.reference_price %} <del aria-label="Обычная цена {{ tariff.reference_price }} рублей">{{ tariff.reference_price }} ₽</del>{% endif %}</p>
+        {% if tariff.book_count %}
+          <p>Книг в формате PDF: <strong>{{ tariff.book_count }}</strong>. Можно заказать разные истории в течение {{ tariff.months }} мес.</p>
+        {% elif tariff.total_pages %}
+          <p>PDF: {{ tariff.total_pages }} стр. (текст — {{ tariff.text_pages|default_if_none:0 }}, иллюстрации — {{ tariff.picture_pages|default_if_none:0 }}).</p>
+        {% endif %}
+        {% if tariff.audio_price is not None or tariff.print_price is not None %}
+          <dl class="tariff-extras">
+            {% if tariff.audio_price is not None %}<div><dt>Озвучка</dt><dd>+{{ tariff.audio_price }} ₽ <small>PDF + озвучка: {{ tariff.price|add:tariff.audio_price }} ₽</small></dd></div>{% endif %}
+            {% if tariff.print_price is not None %}<div><dt>Печать, мягкая обложка</dt><dd>+{{ tariff.print_price }} ₽</dd></div>{% endif %}
+          </dl>
+        {% endif %}
+        {% if not step %}<a class="button secondary" href="{% url 'order' %}?tariff={{ tariff.pk }}">Оставить заявку <span aria-hidden="true">↗</span></a>{% endif %}
+      </article>
+    {% endfor %}
+  </div>
+  <p class="tariff-note">{{ hardcover_terms }} {{ delivery_terms }}</p>
+  <p class="tariff-note">{{ response_time }} {{ review_terms }}</p>
+</section>
+{% endif %}
