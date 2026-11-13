@@ -19,7 +19,7 @@ from .exports import ExportError, book_pdf
 from .models import BookVideo
 from .sheets import book_sheets, reader_spread
 
-RENDERER_VERSION = 2
+RENDERER_VERSION = 3
 WIDTH, HEIGHT = 1280, 720
 
 
@@ -27,7 +27,8 @@ def fingerprint(book, delay=15):
     def snapshot(instance):
         values = {}
         for field in instance._meta.concrete_fields:
-            if field.name in ('created_at', 'status', 'visibility'):
+            # Status affects rendering: every draft PDF/MP4 leaf carries a watermark.
+            if field.name in ('created_at', 'visibility'):
                 continue
             value = getattr(instance, field.attname)
             if isinstance(field, FileField):

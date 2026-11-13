@@ -19,15 +19,20 @@ if (reader && document.querySelector('#page-only')) {
     return focusMode && spread ? [...spread.querySelectorAll('audio')] : [...reader.querySelectorAll('.audio-panel audio')];
   };
   const activeAudio = () => recordings()[track];
+  const attachedVideo = () => focusMode ? reader.querySelector('[data-attached-video]') : null;
 
   function fitPage() {
     if (!focusMode) return;
     const height = window.visualViewport && window.visualViewport.scale <= 1.01 ? window.visualViewport.height : innerHeight;
     document.body.style.setProperty('--reader-height', `${height}px`);
-    const page = reader.querySelector('.focus-spread') || reader.querySelector('.reading-page');
+    const page = attachedVideo()?.closest('.attached-videos') || reader.querySelector('.focus-spread') || reader.querySelector('.reading-page');
     if (!page) return;
     const controls = document.querySelector('.focus-controls');
     const availableHeight = Math.max(100, Math.min(height-24, controls.offsetTop-12));
+    if (page.classList.contains('attached-videos')) {
+      page.style.setProperty('--video-space', `${availableHeight}px`);
+      return;
+    }
     if (page.classList.contains('focus-spread')) {
       const stacked = innerHeight > innerWidth;
       page.classList.toggle('stacked', stacked);
@@ -62,7 +67,9 @@ if (reader && document.querySelector('#page-only')) {
   function watchPage() {
     observer.disconnect();
     const original = reader.querySelector('.reading-page');
-    const page = reader.querySelector('.focus-spread') || original;
+    const videoPanel = reader.querySelector('.attached-videos:not(.is-empty)');
+    document.body.classList.toggle('book-has-attached-video', Boolean(videoPanel));
+    const page = videoPanel || reader.querySelector('.focus-spread') || original;
     document.body.style.setProperty('--book-background', getComputedStyle(original).backgroundImage);
     observer.observe(page);
     observer.observe(document.querySelector('.focus-controls'));
@@ -84,6 +91,7 @@ if (reader && document.querySelector('#page-only')) {
     controller = null;
     changing = false;
     recordings().forEach(audio => audio.pause());
+    reader.querySelectorAll('[data-attached-video]').forEach(video => video.pause());
     playback.pause();
     status.textContent = message;
     status.classList.toggle('sr-only', message === 'Авточтение приостановлено. Можно листать вручную.');
@@ -121,6 +129,7 @@ if (reader && document.querySelector('#page-only')) {
     } else {
       observer.disconnect();
       document.body.style.removeProperty('--book-background');
+      document.body.classList.remove('book-has-attached-video');
       clearTimeout(controlsTimer);
       document.body.classList.remove('focus-controls-visible');
       pageOnly.focus();
@@ -141,6 +150,7 @@ if (reader && document.querySelector('#page-only')) {
     playingSource = null;
     playback.pause();
     recordings().forEach(audio => audio.pause());
+    reader.querySelectorAll('[data-attached-video]').forEach(video => video.pause());
     updateControls();
     status.textContent = 'Открываем страницу…';
     controller = new AbortController();
@@ -154,7 +164,7 @@ if (reader && document.querySelector('#page-only')) {
       const incoming = html.querySelector('[data-book-reader]');
       if (!incoming || !incoming.querySelector('.reading-sheet')) throw new Error('page-unavailable');
       if (version !== generation) return;
-      for (const selector of ['.reading-sheet', '.audio-panel', '.page-navigation', '.contents']) {
+      for (const selector of ['.attached-videos', '.reading-sheet', '.audio-panel', '.page-navigation', '.contents']) {
         reader.querySelector(selector).replaceWith(incoming.querySelector(selector));
       }
       for (const key of ['number','total','focusPrevious','focusNext','focusLabel']) reader.dataset[key] = incoming.dataset[key];
@@ -176,6 +186,13 @@ if (reader && document.querySelector('#page-only')) {
   async function playPage() {
     clearTimer();
     if (!running) return;
+    const video = attachedVideo();
+    if (video) {
+      status.textContent = 'Смотрим видео. Следующая страница откроется после его окончания.';
+      try { await video.play(); }
+      catch (error) { if (running) stop('Нажмите воспроизведение на видео, чтобы посмотреть его перед продолжением книги.'); }
+      return;
+    }
     const recording = activeAudio();
     if (recording) {
       const version = generation;
@@ -223,6 +240,12 @@ if (reader && document.querySelector('#page-only')) {
       stop('Не удалось воспроизвести запись. Можно продолжить вручную.');
     }
   });
+  reader.addEventListener('ended', event => {
+    if (!focusMode || changing || !event.target.matches('[data-attached-video]')) return;
+    running = true;
+    updateControls();
+    void advance();
+  }, true);
   function manual(number) {
     if (changing || !number) return;
     if (running) primePlayback();
@@ -295,7 +318,7 @@ if (reader && document.querySelector('#page-only')) {
     if (event.key === 'ArrowRight') { event.preventDefault(); manual(Number(reader.dataset.focusNext)); }
     if (event.code === 'Space' && !event.target.closest('button,a')) { event.preventDefault(); toggle.click(); }
   });
-  delay.addEventListener('change', () => { if (running && !activeAudio() && !changing) void playPage(); });
+  delay.addEventListener('change', () => { if (running && !activeAudio() && !attachedVideo() && !changing) void playPage(); });
   reader.addEventListener('click', event => {
     const link = event.target.closest('.contents a, .page-navigation a');
     if (!link || !focusMode) return;

@@ -52,6 +52,19 @@ def book_pdf(book, pages):
     canvas.setTitle(book.title)
     canvas.setAuthor('Книги рядом')
 
+    def finish_page():
+        if book.status == 'draft':
+            canvas.saveState()
+            canvas.setFont('BookSerifBold', 34)
+            canvas.setFillColor(colors.HexColor('#9a3d38'))
+            canvas.setFillAlpha(.18)
+            canvas.translate(width / 2, height / 2)
+            canvas.rotate(32)
+            for y in (-155, 0, 155):
+                canvas.drawCentredString(0, y, 'ЧЕРНОВИК · ДЛЯ СОГЛАСОВАНИЯ')
+            canvas.restoreState()
+        canvas.showPage()
+
     def text(value):
         glyphs = pdfmetrics.getFont('BookSerif').face.charToGlyph
         # Ignore unsupported decorative emoji instead of printing replacement boxes/stars.
@@ -143,20 +156,20 @@ def book_pdf(book, pages):
             draw_paragraph(text(book.title), height-45*mm, 45*mm, maximum=30, minimum=16, bold=True, centered=True)
             picture(cover_sheet.illustration, height-100*mm, 140*mm)
             draw_paragraph(text(book.age_label), 42*mm, 15*mm, maximum=13, centered=True)
-        canvas.showPage()
+        finish_page()
         leaf_number = 2
         for index, page in enumerate(pages, 1):
             if page.pdf_full_page and page.illustration:
                 sheet_base()
                 full_picture(page.illustration, preserve=True)
-                canvas.showPage()
+                finish_page()
                 leaf_number += 1
                 continue
             alternating = book.pdf_layout == 'alternating'
             if alternating and page.illustration:
                 sheet_base()
                 full_picture(page.illustration)
-                canvas.showPage()
+                finish_page()
                 leaf_number += 1
                 if not page.text.strip(): continue
             background(leaf_number)
@@ -172,7 +185,7 @@ def book_pdf(book, pages):
             value = '<br/><br/>'.join(text(p).replace('\n','<br/>') for p in page.text.split('\n\n') if p.strip())
             draw_paragraph(value, content_top, content_top-24*mm, maximum=14, minimum=9,
                            identifier=page.title)
-            canvas.showPage()
+            finish_page()
             leaf_number += 1
         end_picture = ending_sheet.illustration
         if end_picture and ending_sheet.pdf_full_page:
@@ -218,7 +231,7 @@ def book_pdf(book, pages):
                 canvas.setFillColor(ink)
                 canvas.setFont('BookSerif', 10)
                 canvas.drawCentredString(x+size/2, y-5*mm, label)
-        canvas.showPage()
+        finish_page()
         canvas.save()
         output.seek(0)
         return output

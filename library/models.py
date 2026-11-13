@@ -5,7 +5,7 @@ from django.db import models
 from django.db.models import Q
 from django.utils import timezone
 from django.core.validators import MinValueValidator, MaxValueValidator, RegexValidator
-from .validators import normalize_image, validate_audio
+from .validators import normalize_image, validate_audio, validate_video
 from .legal import DEFAULT_AGREEMENT_CONTENT, DEFAULT_AGREEMENT_TITLE
 from .homepage import DEFAULT_OFFER_EYEBROW, DEFAULT_OFFER_TITLE, DEFAULT_OFFER_TEXT
 
@@ -140,6 +140,57 @@ class BookAccess(models.Model):
         verbose_name = 'Доступ к книге'
         verbose_name_plural = 'Доступы к книгам'
     def __str__(self): return f'{self.user} → {self.book}'
+
+
+class HiddenVideo(models.Model):
+    title = models.CharField('Название', max_length=200)
+    description = models.TextField('Описание', blank=True)
+    video = models.FileField('Видео MP4 / WebM', upload_to=private_path, validators=[validate_video],
+        help_text='До 500 МБ. Видео доступно только по уникальной скрытой ссылке.')
+    share_token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    book = models.ForeignKey(Book, verbose_name='Книга', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='hidden_videos', help_text='Необязательно. Прикреплённое видео можно показать на обложке или последней странице.')
+    placement = models.CharField('Показывать в книге', max_length=10, default='none', choices=[
+        ('none', 'Не показывать'), ('start', 'В начале книги'), ('end', 'В конце книги')])
+    position = models.PositiveSmallIntegerField('Порядок', default=10)
+    enabled = models.BooleanField('Ссылка и показ включены', default=True)
+    created_at = models.DateTimeField('Создано', auto_now_add=True)
+
+    class Meta:
+        ordering = ['position', 'pk']
+        verbose_name = 'Скрытое видео'
+        verbose_name_plural = 'Скрытые видео'
+
+    def __str__(self): return self.title
+
+    @property
+    def share_url(self):
+        from django.urls import reverse
+        return settings.SITE_URL.rstrip('/') + reverse('hidden-video', args=[self.share_token])
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.placement != 'none' and not self.book_id:
+            raise ValidationError({'book': 'Для показа в начале или конце выберите книгу.'})
+
+
+class PrintedBookExample(models.Model):
+    title = models.CharField('Название варианта', max_length=200)
+    description = models.TextField('Описание', blank=True, max_length=1000)
+    cover = models.FileField('Фото обложки', upload_to=private_path,
+        help_text='JPEG, PNG или WebP. Изображение оформляется на сайте как бумажная книга.')
+    video = models.FileField('Снятое видео книги MP4 / WebM', upload_to=private_path, blank=True,
+        validators=[validate_video], help_text='Необязательно, до 500 МБ.')
+    position = models.PositiveSmallIntegerField('Порядок', default=10)
+    enabled = models.BooleanField('Показывать на сайте', default=True)
+
+    class Meta:
+        ordering = ['position', 'pk']
+        verbose_name = 'Вариант бумажной книги'
+        verbose_name_plural = 'Варианты бумажных книг'
+
+    def __str__(self): return self.title
+    def clean(self): self.cover = normalize_image(self.cover)
 
 class Order(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -430,6 +481,7 @@ class PageVisit(models.Model):
     occurred_at = models.DateTimeField('Время', default=timezone.now, db_index=True)
     kind = models.CharField('Событие', max_length=20, default='page', db_index=True, choices=[
         ('page', 'Посещение страницы'), ('book_open', 'Открытие книги'),
+        ('book_share', 'Переход по скрытой ссылке книги'),
         ('book_page', 'Переход по страницам книги'), ('video', 'Открытие видеоплеера')])
     path = models.CharField('Страница', max_length=300)
     book = models.ForeignKey(Book, null=True, blank=True, on_delete=models.SET_NULL, verbose_name='Книга')

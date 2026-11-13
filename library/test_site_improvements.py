@@ -150,14 +150,19 @@ class SiteImprovementTests(TestCase):
         self.assertEqual(len(row.visitor_key),64)
         self.assertNotIn('secret', row.referrer)
 
-    def test_book_open_and_ajax_turn_are_separate_without_bearer_urls(self):
+    def test_hidden_link_entry_and_ajax_turn_are_separate_without_bearer_urls(self):
         BookPage.objects.create(book=self.private, position=1, title='Страница')
         self.client.get(reverse('shared-reader', args=[self.private.share_token]))
         self.client.get(reverse('shared-reader', args=[self.private.share_token]), {'page':2}, HTTP_X_REQUESTED_WITH='book-reader')
         rows = list(PageVisit.objects.order_by('pk'))
-        self.assertEqual([(row.kind,row.book_page) for row in rows], [('book_open',1),('book_page',2)])
+        self.assertEqual([(row.kind,row.book_page) for row in rows], [('book_share',1),('book_page',2)])
         self.assertTrue(all(row.path == reverse('reader',args=[self.private.slug]) for row in rows))
         self.assertNotIn(str(self.private.share_token), str(list(PageVisit.objects.values())))
+        self.client.force_login(self.staff)
+        dashboard = self.client.get(reverse('admin:library_pagevisit_dashboard'))
+        self.assertEqual(dashboard.context['totals']['shared'], 1)
+        self.assertEqual(dashboard.context['totals']['openings'], 0)
+        self.assertContains(dashboard, 'Переходов по скрытым ссылкам')
 
     def test_assets_status_polling_head_posts_and_errors_are_not_visits(self):
         self.client.get(reverse('health'))

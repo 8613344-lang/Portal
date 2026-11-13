@@ -1,0 +1,8 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="section paper-books-page">
+  <header class="paper-books-heading"><p class="eyebrow">ИЗ ЭКРАНА — В СЕМЕЙНУЮ БИБЛИОТЕКУ</p><h1>Как выглядят наши бумажные книги</h1><p>Посмотрите варианты оформления и реальные снятые видео. Печать в мягкой обложке добавляется к выбранному тарифу; твёрдый переплёт и доставка согласуются отдельно.</p></header>
+  <div class="paper-books-grid">{% for item in paper_books %}{% include 'library/paper_book_card.html' %}{% empty %}<p class="muted">Мы готовим фотографии бумажных книг. Пока можно <a href="{% url 'sample-book' %}">полистать цифровой образец</a>.</p>{% endfor %}</div>
+  <div class="paper-books-cta"><a class="button primary" href="{% url 'order' %}">Создать свою книгу <span aria-hidden="true">↗</span></a><p>Заявка без регистрации и оплаты.</p></div>
+</section>
+{% endblock %}

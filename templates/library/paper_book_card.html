@@ -1,0 +1,10 @@
+{% load web_images %}
+<article class="paper-book-card">
+  <div class="paper-book-stage" aria-label="Бумажная книга «{{ item.title }}»">
+    <div class="paper-book-object"><span class="paper-book-pages" aria-hidden="true"></span><img src="{% web_image item.cover 640 %}" width="420" height="560" loading="lazy" alt="Фото бумажной книги «{{ item.title }}»"></div>
+  </div>
+  <div class="paper-book-copy">
+    <h3>{{ item.title }}</h3>{% if item.description %}<p>{{ item.description }}</p>{% endif %}
+    {% if item.video %}<details class="paper-book-video"><summary><span aria-hidden="true">▶</span> Посмотреть снятое видео</summary><video controls playsinline preload="metadata" poster="{% web_image item.cover 640 %}" src="{% url 'paper-book-video' item.pk %}" aria-label="Видео бумажной книги «{{ item.title }}»"></video></details>{% endif %}
+  </div>
+</article>

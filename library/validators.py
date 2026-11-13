@@ -25,6 +25,25 @@ def validate_audio(value):
     finally:
         value.seek(0)
 
+
+def validate_video(value):
+    if not value:
+        return
+    suffix = Path(value.name).suffix.lower()
+    if suffix not in {'.mp4', '.webm'} or not 0 < value.size <= 500 * 1024 * 1024:
+        raise ValidationError('Выберите MP4 или WebM размером до 500 МБ.')
+    try:
+        value.seek(0)
+        header = value.read(64)
+        if suffix == '.mp4' and b'ftyp' not in header[:32]:
+            raise ValueError()
+        if suffix == '.webm' and not header.startswith(b'\x1aE\xdf\xa3'):
+            raise ValueError()
+    except (OSError, ValueError) as exc:
+        raise ValidationError('Не удалось прочитать видео. Загрузите настоящий файл MP4 или WebM.') from exc
+    finally:
+        value.seek(0)
+
 def normalize_image(value):
     if not value or getattr(value, '_committed', False):
         return value

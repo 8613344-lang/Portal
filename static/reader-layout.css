@@ -53,3 +53,14 @@ body.book-focus .focus-controls #auto-status:not(.sr-only){width:100%;max-width:
 @media(max-width:1100px), (pointer:coarse){body.book-focus .focus-controls{opacity:1;pointer-events:auto}}
 @media(max-width:380px){.focus-toolbar{gap:2px;padding:7px 8px}body.book-focus .focus-controls label{gap:6px;margin-left:2px;padding-left:8px;font-size:12px}body.book-focus .focus-controls #page-delay{width:36px;font-size:16px}}
 @media print{.mobile-nav-dock,body.book-focus .focus-controls{display:none!important}}
+
+/* Draft pages stay review-only in every reader layout; PDF/video use the same mark. */
+.draft-watermarked .reader-shell:before{content:'ЧЕРНОВИК · ДЛЯ СОГЛАСОВАНИЯ';display:block;margin:0 0 14px;padding:9px 14px;border:1px solid #b84c3f55;border-radius:10px;background:#fff0ed;color:#8d342c;font-size:12px;font-weight:700;letter-spacing:.08em;text-align:center}
+.draft-watermarked .reading-page,.draft-watermarked .spread-leaf{position:relative;overflow:hidden}
+.draft-watermarked .reading-page:after,.draft-watermarked .spread-leaf:after{content:'ЧЕРНОВИК';position:absolute;left:-22%;top:43%;z-index:20;width:144%;padding:12px 0;transform:rotate(-28deg);background:#fff9;color:#9a3d38aa;border-block:2px solid #9a3d3855;font:700 clamp(24px,5vw,54px)/1.2 Arial,sans-serif;letter-spacing:.18em;text-align:center;pointer-events:none;text-shadow:0 1px #fff}
+.attached-videos{display:grid;gap:16px;margin-bottom:22px}.attached-videos.is-empty{display:none}.attached-videos article{padding:18px;border:1px solid #deddd5;border-radius:14px;background:#fffdf8}.attached-videos h2{font-size:22px}.attached-videos p:not(.eyebrow){margin-top:6px;color:#66726b}.attached-videos video{display:block;width:100%;max-height:65vh;margin:14px 0;background:#242721;border-radius:10px}
+body.book-focus.book-has-attached-video .reading-sheet{display:none}
+body.book-focus .attached-videos:not(.is-empty){position:absolute;inset:0;z-index:8;display:grid;align-content:start;justify-items:center;gap:16px;margin:0;padding:12px 12px 118px;overflow:auto;background:#242721}
+body.book-focus .attached-videos:not(.is-empty) article{width:min(900px,100%);box-sizing:border-box}
+body.book-focus .attached-videos:not(.is-empty) video{max-height:min(58vh,calc(var(--video-space,700px) - 190px));object-fit:contain}
+@media print{.draft-watermarked .reading-page:after,.draft-watermarked .spread-leaf:after{background:#fff8;color:#9a3d3899}}

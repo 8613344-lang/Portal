@@ -1,0 +1,5 @@
+{% extends 'base.html' %}
+{% block title %}{{ item.title }} · Книги рядом{% endblock %}
+{% block content %}
+<section class="section hidden-video-page"><p class="eyebrow">ВИДЕО ПО СКРЫТОЙ ССЫЛКЕ</p><h1>{{ item.title }}</h1>{% if item.description %}<p class="hidden-video-description">{{ item.description }}</p>{% endif %}<video controls playsinline preload="metadata" src="{% url 'hidden-video-file' item.share_token %}"></video>{% if item.book_id %}<p class="muted">Видео относится к книге «{{ item.book.title }}».</p>{% endif %}</section>
+{% endblock %}

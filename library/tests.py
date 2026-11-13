@@ -444,7 +444,7 @@ class PlatformTests(TestCase):
         data = {'title':'Из PDF', 'slug':'admin-pdf', 'age_label':'Для чтения', 'status':'draft', 'visibility':'restricted',
                 'pdf_layout':'alternating', 'background_theme':'sky', 'source_pdf':self.pdf_upload(), '_save':'1',
                 'ending_panel_color':'#ffffff', 'ending_panel_transparency':'7', 'ending_text_color':'#304b40', 'ending_qr_color':'#000000'}
-        for prefix in ('pages','grants'):
+        for prefix in ('pages','grants','hidden_videos'):
             data.update({f'{prefix}-TOTAL_FORMS':'0',f'{prefix}-INITIAL_FORMS':'0',f'{prefix}-MIN_NUM_FORMS':'0',f'{prefix}-MAX_NUM_FORMS':'1000'})
         response = self.client.post(reverse('admin:library_book_add'), data)
         self.assertEqual(response.status_code, 302, response.content[:1500])

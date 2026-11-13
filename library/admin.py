@@ -6,9 +6,10 @@ from django import forms as django_forms
 from django.contrib.auth.models import User
 from django.contrib.auth.admin import UserAdmin
 from django.contrib.auth.forms import UserChangeForm
+from django.urls import reverse
 from .models import Book, BookPage, BookAccess, Order, NotificationRecipient, Notification
 from .models import UserAgreement, HomepagePromotion, AudioPreview, BookVideo, HomepageItem, PageVisit
-from .models import BookTariff, LegalDocument, OrderFunnelEvent
+from .models import BookTariff, LegalDocument, OrderFunnelEvent, HiddenVideo, PrintedBookExample
 from .forms import BookAdminForm
 from .commerce import mark_orders
 
@@ -44,6 +45,20 @@ class AccessInline(admin.TabularInline):
     model = BookAccess
     extra = 0
     autocomplete_fields = ['user']
+
+
+class HiddenVideoInline(admin.StackedInline):
+    model = HiddenVideo
+    extra = 0
+    fields = ['title', 'description', 'video', 'placement', 'position', 'enabled', 'hidden_link']
+    readonly_fields = ['hidden_link']
+    show_change_link = True
+
+    @admin.display(description='Скрытая ссылка')
+    def hidden_link(self, obj):
+        if not obj or not obj.pk:
+            return 'Появится после сохранения видео.'
+        return format_html('<a href="{}" target="_blank" rel="noopener">{}</a>', obj.share_url, obj.share_url)
 
 @admin.register(Book)
 class BookAdmin(admin.ModelAdmin):
@@ -94,7 +109,7 @@ class BookAdmin(admin.ModelAdmin):
     list_filter = ['status', 'visibility', 'pdf_layout', 'background_theme']
     search_fields = ['title', 'slug', 'child_name']
     prepopulated_fields = {'slug': ['title']}
-    inlines = [PageInline, AccessInline]
+    inlines = [PageInline, AccessInline, HiddenVideoInline]
     view_on_site = False
     fieldsets = [('Книга', {'fields': ('title', 'slug', 'description', 'child_name', 'age_label')}),
                  ('Обложка', {'fields': ('cover', 'cover_page', 'cover_full_page', 'cover_audio')}),
@@ -131,6 +146,49 @@ class PageAdmin(admin.ModelAdmin):
     list_filter = ['book__status']
     search_fields = ['title', 'book__title']
     autocomplete_fields = ['book']
+
+
+@admin.register(HiddenVideo)
+class HiddenVideoAdmin(admin.ModelAdmin):
+    list_display = ['title', 'book', 'placement', 'position', 'enabled', 'created_at']
+    list_filter = ['enabled', 'placement']
+    search_fields = ['title', 'description', 'book__title']
+    autocomplete_fields = ['book']
+    readonly_fields = ['hidden_link', 'created_at']
+    fields = ['title', 'description', 'video', 'book', 'placement', 'position', 'enabled', 'hidden_link', 'created_at']
+    actions = ['rotate_hidden_links']
+
+    @admin.display(description='Скрытая ссылка')
+    def hidden_link(self, obj):
+        if not obj or not obj.pk:
+            return 'Ссылка появится после сохранения.'
+        return format_html('<a href="{}" target="_blank" rel="noopener">{}</a>', obj.share_url, obj.share_url)
+
+    @admin.action(description='Создать новые скрытые ссылки (отозвать старые)', permissions=['change'])
+    def rotate_hidden_links(self, request, queryset):
+        for item in queryset:
+            item.share_token = uuid.uuid4()
+            item.save(update_fields=['share_token'])
+        self.message_user(request, 'Ссылки заменены. Старые ссылки больше не работают.')
+
+
+@admin.register(PrintedBookExample)
+class PrintedBookExampleAdmin(admin.ModelAdmin):
+    list_display = ['title', 'position', 'enabled', 'has_video']
+    list_editable = ['position', 'enabled']
+    list_filter = ['enabled']
+    search_fields = ['title', 'description']
+    fields = ['title', 'description', 'cover', 'video', 'position', 'enabled', 'public_page']
+    readonly_fields = ['public_page']
+
+    @admin.display(boolean=True, description='Видео')
+    def has_video(self, obj): return bool(obj.video)
+
+    @admin.display(description='Раздел на сайте')
+    def public_page(self, obj):
+        return format_html('<a href="{}" target="_blank" rel="noopener">Открыть бумажные книги</a>', reverse('paper-books'))
+
+    def view_on_site(self, obj): return reverse('paper-books')
 
 @admin.register(BookAccess)
 class AccessAdmin(admin.ModelAdmin):
@@ -380,13 +438,15 @@ class PageVisitAdmin(admin.ModelAdmin):
         visits = PageVisit.objects.filter(occurred_at__gte=timezone.now()-timedelta(days=days))
         if not include_bots: visits = visits.filter(is_bot=False)
         totals = visits.aggregate(total=Count('pk'), openings=Count('pk', filter=Q(kind='book_open')),
+            shared=Count('pk', filter=Q(kind='book_share')),
             turns=Count('pk', filter=Q(kind='book_page')), videos=Count('pk', filter=Q(kind='video')), users=Count('user', distinct=True))
         daily = list(visits.annotate(day=TruncDate('occurred_at')).values('day').annotate(total=Count('pk'), visitors=Count('visitor_key', distinct=True)).order_by('day'))
         peak = max((row['total'] for row in daily), default=1)
         for row in daily: row['percent'] = round(row['total']/peak*100)
         books = visits.filter(book__isnull=False).values('book_id', 'book__title').annotate(
-            openings=Count('pk', filter=Q(kind='book_open')), turns=Count('pk', filter=Q(kind='book_page')),
-            videos=Count('pk', filter=Q(kind='video'))).order_by('-openings', '-turns')[:20]
+            openings=Count('pk', filter=Q(kind='book_open')), shared=Count('pk', filter=Q(kind='book_share')),
+            turns=Count('pk', filter=Q(kind='book_page')),
+            videos=Count('pk', filter=Q(kind='video'))).order_by('-shared', '-openings', '-turns')[:20]
         pages = visits.values('path').annotate(total=Count('pk')).order_by('-total')[:20]
         cities = visits.exclude(city='').values('city', 'region', 'country').annotate(total=Count('pk')).order_by('-total')[:20]
         from urllib.parse import urlencode

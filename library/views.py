@@ -12,7 +12,8 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods, require_POST
 from .forms import ChildBriefForm, OrderForm, PageAudioForm
 from .models import Book, BookPage, Notification, NotificationRecipient, Order
-from .models import UserAgreement, AudioPreview, HomepageItem, BookTariff, LegalDocument, OrderFunnelEvent
+from .models import (UserAgreement, AudioPreview, HomepageItem, BookTariff, LegalDocument,
+                     OrderFunnelEvent, HiddenVideo, PrintedBookExample)
 from .commerce import commerce_context, record_funnel
 from .sheets import book_sheets, ending_qrs, reader_spread
 from django.urls import reverse
@@ -45,6 +46,7 @@ def home(request):
             Q(kind='idea') | Q(kind='book', book__status='published', book__visibility='public')
         ).select_related('book__cover_page'),
         'audio_previews': audio_previews,
+        'paper_books': PrintedBookExample.objects.filter(enabled=True)[:3],
         **commerce_context(),
     })
 
@@ -96,13 +98,16 @@ def reader(request, slug, shared=False):
     current = pages[number - 1] if pages else None
     request.visit_book = book
     request.visit_book_page = number
-    request.visit_kind = 'book_page' if request.headers.get('X-Requested-With') == 'book-reader' else 'book_open'
+    request.visit_kind = ('book_page' if request.headers.get('X-Requested-With') == 'book-reader'
+                          else 'book_share' if shared else 'book_open')
     permission = 'library.change_bookpage' if current.kind == 'story' else 'library.change_book'
     can_edit = request.user.is_authenticated and request.user.is_staff and request.user.has_perm(permission)
     audio_action = reverse('page-audio', args=[current.pk]) if current.kind == 'story' else reverse('sheet-audio', args=[book.slug, current.kind])
     app_mode = request.GET.get('app') == '1'
     shelf_mode = request.GET.get('shelf') == '1' and not app_mode
-    return render(request, 'library/reader.html', {'book': book, 'shared': shared or app_mode or shelf_mode, 'app_mode': app_mode, 'shelf_mode': shelf_mode, 'shelf_return_url': reverse('web-shelf') if shelf_mode else '', 'device': 'tablet' if request.GET.get('device') == 'tablet' else 'phone', 'base_template': 'app_base.html' if app_mode else 'base.html', 'pages': pages, 'current': current, 'spread': reader_spread(book, pages, number), 'number': number, 'total': len(pages), 'previous': number - 1, 'next': number + 1, 'can_edit': can_edit, 'audio_form': PageAudioForm(), 'audio_action':audio_action, 'ending_qrs': ending_qrs(book) if current.kind == 'ending' else [], 'audio_count': sum(bool(p.audio) for p in pages),
+    attached_videos = book.hidden_videos.filter(enabled=True,
+        placement='start' if current.kind == 'cover' else 'end' if current.kind == 'ending' else 'none').exclude(placement='none')
+    return render(request, 'library/reader.html', {'book': book, 'shared': shared or app_mode or shelf_mode, 'app_mode': app_mode, 'shelf_mode': shelf_mode, 'shelf_return_url': reverse('web-shelf') if shelf_mode else '', 'device': 'tablet' if request.GET.get('device') == 'tablet' else 'phone', 'base_template': 'app_base.html' if app_mode else 'base.html', 'pages': pages, 'current': current, 'spread': reader_spread(book, pages, number), 'number': number, 'total': len(pages), 'previous': number - 1, 'next': number + 1, 'can_edit': can_edit, 'audio_form': PageAudioForm(), 'audio_action':audio_action, 'ending_qrs': ending_qrs(book) if current.kind == 'ending' else [], 'audio_count': sum(bool(p.audio) for p in pages), 'attached_videos': attached_videos,
         'offer_after_reading': not app_mode and book.status == 'published' and book.visibility == 'public' and len(pages) > 1})
 
 @never_cache
@@ -279,6 +284,44 @@ def legal_document(request, kind):
 def sample_book(request):
     return render(request, 'library/sample_book.html')
 
+
+@require_http_methods(['GET', 'HEAD'])
+def paper_books(request):
+    path = reverse('paper-books')
+    set_metadata(request, 'Как выглядят наши бумажные книги — Книги рядом',
+        'Фото и снятые видео вариантов персональных детских книг в мягкой обложке.', path)
+    return render(request, 'library/paper_books.html', {
+        'paper_books': PrintedBookExample.objects.filter(enabled=True),
+    })
+
+
+@never_cache
+@require_http_methods(['GET', 'HEAD'])
+def hidden_video(request, token):
+    item = get_object_or_404(HiddenVideo, share_token=token, enabled=True)
+    response = render(request, 'library/hidden_video.html', {'item': item})
+    response['Referrer-Policy'] = 'same-origin'
+    return response
+
+
+@never_cache
+@require_http_methods(['GET', 'HEAD'])
+def hidden_video_file(request, token):
+    item = get_object_or_404(HiddenVideo, share_token=token, enabled=True)
+    mime = 'video/webm' if item.video.name.lower().endswith('.webm') else 'video/mp4'
+    return stream_upload(request, item.video, mime=mime)
+
+
+@never_cache
+@require_http_methods(['GET', 'HEAD'])
+def paper_video_file(request, pk):
+    item = get_object_or_404(PrintedBookExample, pk=pk)
+    can_preview = request.user.is_authenticated and request.user.is_staff and request.user.has_perm('library.view_printedbookexample')
+    if not item.enabled and not can_preview:
+        raise Http404
+    mime = 'video/webm' if item.video.name.lower().endswith('.webm') else 'video/mp4'
+    return stream_upload(request, item.video, mime=mime)
+
 @never_cache
 def privacy(request):
     agreement = UserAgreement.objects.filter(pk=1).first() or UserAgreement()
@@ -341,6 +384,12 @@ def authorized_upload(request, path):
                 if not (item.kind == 'idea' and item.enabled) and not (request.user.is_authenticated and request.user.is_staff and request.user.has_perm('library.view_homepageitem')):
                     raise Http404
                 return item.image
+            paper = PrintedBookExample.objects.filter(cover=path).first()
+            if paper:
+                can_preview = request.user.is_authenticated and request.user.is_staff and request.user.has_perm('library.view_printedbookexample')
+                if not paper.enabled and not can_preview:
+                    raise Http404
+                return paper.cover
             preview = AudioPreview.objects.filter(audio=path).first()
             if not preview or not request.user.is_authenticated or not request.user.is_staff or not (
                 request.user.has_perm('library.view_audiopreview') or request.user.has_perm('library.change_audiopreview')

@@ -87,7 +87,7 @@ class SearchTests(TestCase):
         self.assertEqual(index, ['https://qicko.ru/sitemap-pages.xml', 'https://qicko.ru/sitemap-books-1.xml'])
         self.assertNotIn('X-Robots-Tag', robots)
         pages = self.locations(self.client.get(reverse('sitemap-pages')))
-        self.assertEqual(set(pages), {'https://qicko.ru'+reverse(name) for name in ('home','catalog','order','book-service')})
+        self.assertEqual(set(pages), {'https://qicko.ru'+reverse(name) for name in ('home','catalog','order','book-service','paper-books')})
 
     def test_sitemap_only_contains_published_public_pages_and_no_access_tokens(self):
         response = self.client.get(reverse('sitemap-books', args=[1]))

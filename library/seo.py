@@ -165,7 +165,7 @@ def sitemap(request):
 
 @require_safe
 def sitemap_pages(request):
-    paths = [reverse(name) for name in ('home', 'book-service', 'catalog', 'order')]
+    paths = [reverse(name) for name in ('home', 'book-service', 'paper-books', 'catalog', 'order')]
     paths += [reverse('catalog')+f'?page={page}' for page in range(2, math.ceil(public_books().count()/18)+1)]
     return xml_response(request, 'urlset', paths)
 
