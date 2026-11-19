@@ -6,7 +6,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         definitions = {
             'Редакторы книг': ['view_book', 'add_book', 'change_book', 'view_bookpage', 'add_bookpage', 'change_bookpage', 'delete_bookpage', 'view_bookaccess', 'add_bookaccess', 'change_bookaccess', 'delete_bookaccess', 'view_hiddenvideo', 'add_hiddenvideo', 'change_hiddenvideo', 'delete_hiddenvideo', 'view_printedbookexample', 'add_printedbookexample', 'change_printedbookexample', 'delete_printedbookexample'],
-            'Менеджеры заказов': ['view_order', 'change_order', 'view_book', 'view_bookaccess', 'add_bookaccess', 'view_notification', 'view_orderfunnelevent'],
+            'Менеджеры заказов': ['view_order', 'change_order', 'view_book', 'view_bookaccess', 'add_bookaccess', 'view_notification', 'view_orderfunnelevent', 'view_reviewinvitation', 'add_reviewinvitation', 'change_reviewinvitation', 'view_customerreview', 'change_customerreview'],
         }
         for name, codes in definitions.items():
             group, _ = Group.objects.get_or_create(name=name)

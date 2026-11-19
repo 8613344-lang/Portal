@@ -12,6 +12,8 @@ class RateLimitMiddleware:
         limits = {'/accounts/confirm/start/':5, '/accounts/confirm/':20, '/accounts/confirm/resend/':5, '/accounts/password-reset/':5, '/order/': 10, '/accounts/login/': 20, '/app/login/': 20, '/app/account/delete/': 5, '/admin/login/': 20, '/accounts/register/': 10}
         if request.path.startswith('/books/') and request.path.endswith('/video/create/'):
             limits[request.path] = 5
+        if request.path.startswith('/review/') and request.path != '/review/sent/':
+            limits[request.path] = 5
         if settings.RATE_LIMIT_ENABLED and request.method == 'POST' and request.path in limits:
             # Nginx overwrites this header. Production app is not exposed directly.
             ip = request.META.get('HTTP_X_REAL_IP') if settings.BEHIND_PROXY else request.META.get('REMOTE_ADDR')

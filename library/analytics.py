@@ -15,7 +15,7 @@ from .models import PageVisit
 from .geolocation import lookup
 
 logger = logging.getLogger(__name__)
-PAGE_ROUTES = {'home', 'catalog', 'book-service', 'book-detail', 'order', 'order-success',
+PAGE_ROUTES = {'home', 'catalog', 'book-service', 'book-detail', 'reviews', 'order', 'order-success',
                'privacy', 'web-shelf', 'app-shelf', 'account', 'profile', 'login', 'app-login',
                'register', 'email-start', 'install'}
 

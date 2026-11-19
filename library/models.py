@@ -1,4 +1,5 @@
 import uuid
+from datetime import timedelta
 from pathlib import Path
 from django.conf import settings
 from django.db import models
@@ -12,6 +13,10 @@ from .homepage import DEFAULT_OFFER_EYEBROW, DEFAULT_OFFER_TITLE, DEFAULT_OFFER_
 def private_path(instance, filename):
     suffix = Path(filename).suffix.lower()
     return f'{instance._meta.model_name}/{uuid.uuid4().hex}{suffix}'
+
+
+def review_invitation_expiry():
+    return timezone.now() + timedelta(days=30)
 
 class BookQuerySet(models.QuerySet):
     def visible_to(self, user):
@@ -191,6 +196,96 @@ class PrintedBookExample(models.Model):
 
     def __str__(self): return self.title
     def clean(self): self.cover = normalize_image(self.cover)
+
+
+class ReviewInvitation(models.Model):
+    token = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    customer_name = models.CharField('Имя покупателя', max_length=150, blank=True)
+    book = models.ForeignKey(Book, verbose_name='Книга', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='review_invitations')
+    order = models.ForeignKey('Order', verbose_name='Заказ', null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='review_invitations')
+    active = models.BooleanField('Ссылка активна', default=True)
+    expires_at = models.DateTimeField('Действует до', default=review_invitation_expiry)
+    created_at = models.DateTimeField('Создана', auto_now_add=True)
+    used_at = models.DateTimeField('Отзыв получен', null=True, blank=True, editable=False)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Ссылка для отзыва'
+        verbose_name_plural = 'Ссылки для отзывов'
+
+    def __str__(self):
+        return self.customer_name or (str(self.order) if self.order_id else f'Ссылка {str(self.token)[:8]}')
+
+    @property
+    def share_url(self):
+        from django.urls import reverse
+        return settings.SITE_URL.rstrip('/') + reverse('review-submit', args=[self.token])
+
+    @property
+    def available(self):
+        return self.active and not self.used_at and self.expires_at > timezone.now()
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.order_id and self.book_id and self.order.book_id and self.order.book_id != self.book_id:
+            raise ValidationError({'book': 'Выберите книгу из указанного заказа.'})
+
+
+class CustomerReview(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'На модерации'
+        PUBLISHED = 'published', 'Опубликован'
+        REJECTED = 'rejected', 'Отклонён'
+
+    invitation = models.OneToOneField(ReviewInvitation, verbose_name='Персональная ссылка',
+        on_delete=models.PROTECT, related_name='review')
+    author_name = models.CharField('Имя автора', max_length=150)
+    rating = models.PositiveSmallIntegerField('Оценка', validators=[MinValueValidator(1), MaxValueValidator(5)])
+    text = models.TextField('Отзыв', max_length=4000)
+    photo = models.FileField('Фото', upload_to=private_path, blank=True,
+        help_text='JPEG, PNG или WebP до 10 МБ.')
+    video = models.FileField('Видео', upload_to=private_path, blank=True, validators=[validate_video],
+        help_text='MP4 или WebM до 500 МБ.')
+    publication_consent = models.BooleanField('Согласие на публикацию', default=False)
+    status = models.CharField('Статус', max_length=12, choices=Status.choices, default=Status.PENDING, db_index=True)
+    featured = models.BooleanField('Показывать на главной', default=False)
+    position = models.PositiveSmallIntegerField('Порядок', default=10)
+    admin_note = models.TextField('Комментарий администратора', blank=True)
+    created_at = models.DateTimeField('Получен', auto_now_add=True)
+    published_at = models.DateTimeField('Опубликован', null=True, blank=True, editable=False)
+
+    class Meta:
+        ordering = ['position', '-published_at', '-created_at']
+        verbose_name = 'Отзыв покупателя'
+        verbose_name_plural = 'Отзывы покупателей'
+
+    def __str__(self): return f'{self.author_name}: {self.text[:60]}'
+
+    @property
+    def book(self):
+        return self.invitation.book or (self.invitation.order.book if self.invitation.order_id else None)
+
+    @property
+    def public_book(self):
+        book = self.book
+        if book and book.status == 'published' and book.visibility == 'public':
+            return book
+        return None
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        self.photo = normalize_image(self.photo)
+        if self.status == self.Status.PUBLISHED and not self.publication_consent:
+            raise ValidationError({'status': 'Нельзя опубликовать отзыв без согласия автора.'})
+
+    def save(self, *args, **kwargs):
+        if self.status == self.Status.PUBLISHED and not self.published_at:
+            self.published_at = timezone.now()
+        elif self.status != self.Status.PUBLISHED:
+            self.published_at = None
+        super().save(*args, **kwargs)
 
 class Order(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

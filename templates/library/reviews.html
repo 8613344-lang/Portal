@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="section reviews-page">
+  <header class="reviews-heading"><p class="eyebrow">ОТЗЫВЫ ПОКУПАТЕЛЕЙ</p><h1>Истории, которые уже стали семейными</h1><p>Здесь родители делятся впечатлениями о персональных книгах, иллюстрациях и моментах чтения вместе с детьми.</p></header>
+  <div class="reviews-grid">{% for review in page_obj %}{% include 'library/review_card.html' %}{% empty %}<div class="empty"><h2>Первые отзывы скоро появятся</h2><p>Мы публикуем их только с разрешения покупателей.</p></div>{% endfor %}</div>
+  {% if page_obj.paginator.num_pages > 1 %}<nav class="pagination" aria-label="Страницы отзывов">{% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}">Предыдущая</a>{% endif %}<span>{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>{% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}">Следующая</a>{% endif %}</nav>{% endif %}
+  <div class="reviews-cta"><h2>Хотите такую же историю для своего ребёнка?</h2><a class="button primary" href="{% url 'order' %}">Создать свою книгу</a><p>Заявка без регистрации и оплаты.</p></div>
+</section>
+{% endblock %}

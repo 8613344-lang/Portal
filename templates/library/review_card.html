@@ -1,0 +1,7 @@
+{% load web_images %}
+<article class="review-card">
+  <header><div class="review-avatar" aria-hidden="true">{{ review.author_name|first|upper }}</div><div><h3>{{ review.author_name }}</h3><div class="review-rating" aria-label="Оценка {{ review.rating }} из 5">{% for star in "12345" %}<span class="{% if forloop.counter > review.rating %}empty{% endif %}" aria-hidden="true">★</span>{% endfor %}</div></div></header>
+  <blockquote>{{ review.text|linebreaksbr }}</blockquote>
+  {% if review.public_book %}<p class="review-book">О книге «{{ review.public_book.title }}»</p>{% endif %}
+  {% if review.photo or review.video %}<div class="review-media">{% if review.photo %}<img src="{% web_image review.photo 960 %}" loading="lazy" alt="Фото к отзыву {{ review.author_name }}">{% endif %}{% if review.video %}<video controls playsinline preload="metadata"{% if review.photo %} poster="{% web_image review.photo 960 %}"{% endif %} src="{% url 'review-video' review.pk %}" aria-label="Видео к отзыву {{ review.author_name }}"></video>{% endif %}</div>{% endif %}
+</article>

@@ -8,12 +8,13 @@ from django.db import transaction
 from django.db.models import Q
 from django.http import FileResponse, Http404, HttpResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods, require_POST
-from .forms import ChildBriefForm, OrderForm, PageAudioForm
+from .forms import ChildBriefForm, OrderForm, PageAudioForm, CustomerReviewForm
 from .models import Book, BookPage, Notification, NotificationRecipient, Order
 from .models import (UserAgreement, AudioPreview, HomepageItem, BookTariff, LegalDocument,
-                     OrderFunnelEvent, HiddenVideo, PrintedBookExample)
+                     OrderFunnelEvent, HiddenVideo, PrintedBookExample, ReviewInvitation, CustomerReview)
 from .commerce import commerce_context, record_funnel
 from .sheets import book_sheets, ending_qrs, reader_spread
 from django.urls import reverse
@@ -47,6 +48,9 @@ def home(request):
         ).select_related('book__cover_page'),
         'audio_previews': audio_previews,
         'paper_books': PrintedBookExample.objects.filter(enabled=True)[:3],
+        'customer_reviews': CustomerReview.objects.filter(
+            status=CustomerReview.Status.PUBLISHED, publication_consent=True
+        ).select_related('invitation__book', 'invitation__order__book').order_by('-featured', 'position', '-published_at')[:3],
         **commerce_context(),
     })
 
@@ -322,6 +326,65 @@ def paper_video_file(request, pk):
     mime = 'video/webm' if item.video.name.lower().endswith('.webm') else 'video/mp4'
     return stream_upload(request, item.video, mime=mime)
 
+
+@require_http_methods(['GET', 'HEAD'])
+def reviews(request):
+    path = reverse('reviews')
+    set_metadata(request, 'Отзывы покупателей о персональных детских книгах — Книги рядом',
+        'Отзывы родителей о персональных сказках, иллюстрациях, озвучке и печатных книгах.', path)
+    page = Paginator(CustomerReview.objects.filter(
+        status=CustomerReview.Status.PUBLISHED, publication_consent=True
+    ).select_related('invitation__book', 'invitation__order__book').order_by('-featured', 'position', '-published_at'), 12).get_page(request.GET.get('page'))
+    return render(request, 'library/reviews.html', {'page_obj': page})
+
+
+@never_cache
+@require_http_methods(['GET', 'POST'])
+def review_submit(request, token):
+    invitation = get_object_or_404(ReviewInvitation.objects.select_related('book', 'order__book'), token=token)
+    review_book = invitation.book or (invitation.order.book if invitation.order_id else None)
+    if not invitation.available:
+        response = render(request, 'library/review_form.html', {'invitation': invitation, 'review_book': review_book, 'unavailable': True}, status=410)
+        response['Referrer-Policy'] = 'same-origin'
+        return response
+    initial_name = invitation.customer_name or (invitation.order.parent_name if invitation.order_id else '')
+    form = CustomerReviewForm(request.POST or None, request.FILES or None,
+        instance=CustomerReview(invitation=invitation), initial={'author_name': initial_name})
+    if request.method == 'POST' and form.is_valid():
+        with transaction.atomic():
+            locked = ReviewInvitation.objects.select_for_update().get(pk=invitation.pk)
+            if not locked.available:
+                response = render(request, 'library/review_form.html', {'invitation': locked, 'review_book': review_book, 'unavailable': True}, status=410)
+                response['Referrer-Policy'] = 'same-origin'
+                return response
+            review = form.save(commit=False)
+            review.invitation = locked
+            review.save()
+            locked.used_at = timezone.now()
+            locked.active = False
+            locked.save(update_fields=['used_at', 'active'])
+        return redirect('review-thanks')
+    response = render(request, 'library/review_form.html', {'invitation': invitation, 'review_book': review_book, 'form': form})
+    response['Referrer-Policy'] = 'same-origin'
+    return response
+
+
+@never_cache
+@require_http_methods(['GET', 'HEAD'])
+def review_thanks(request):
+    return render(request, 'library/review_thanks.html')
+
+
+@never_cache
+@require_http_methods(['GET', 'HEAD'])
+def review_video(request, pk):
+    item = get_object_or_404(CustomerReview, pk=pk)
+    can_preview = request.user.is_authenticated and request.user.is_staff and request.user.has_perm('library.view_customerreview')
+    if item.status != CustomerReview.Status.PUBLISHED and not can_preview:
+        raise Http404
+    mime = 'video/webm' if item.video.name.lower().endswith('.webm') else 'video/mp4'
+    return stream_upload(request, item.video, mime=mime)
+
 @never_cache
 def privacy(request):
     agreement = UserAgreement.objects.filter(pk=1).first() or UserAgreement()
@@ -390,6 +453,12 @@ def authorized_upload(request, path):
                 if not paper.enabled and not can_preview:
                     raise Http404
                 return paper.cover
+            review = CustomerReview.objects.filter(photo=path).first()
+            if review:
+                can_preview = request.user.is_authenticated and request.user.is_staff and request.user.has_perm('library.view_customerreview')
+                if review.status != CustomerReview.Status.PUBLISHED and not can_preview:
+                    raise Http404
+                return review.photo
             preview = AudioPreview.objects.filter(audio=path).first()
             if not preview or not request.user.is_authenticated or not request.user.is_staff or not (
                 request.user.has_perm('library.view_audiopreview') or request.user.has_perm('library.change_audiopreview')

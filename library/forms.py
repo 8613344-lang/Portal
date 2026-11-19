@@ -1,6 +1,6 @@
 from django import forms
 from django.contrib.auth.models import User
-from .models import Order, Book
+from .models import Order, Book, CustomerReview
 from .commerce import OCCASIONS, OTHER_OCCASION
 
 class BookAdminForm(forms.ModelForm):
@@ -119,3 +119,28 @@ class OrderForm(forms.ModelForm):
 class PageAudioForm(forms.Form):
     from .validators import validate_audio
     audio = forms.FileField(label='Запись MP3 / WAV', validators=[validate_audio], widget=forms.FileInput(attrs={'accept': '.mp3,.wav'}))
+
+
+class CustomerReviewForm(forms.ModelForm):
+    website = forms.CharField(required=False, widget=forms.HiddenInput)
+    publication_consent = forms.BooleanField(
+        label='Я разрешаю опубликовать отзыв и прикреплённые материалы на сайте')
+
+    class Meta:
+        model = CustomerReview
+        fields = ['author_name', 'rating', 'text', 'photo', 'video', 'publication_consent']
+        widgets = {
+            'rating': forms.RadioSelect(choices=[(value, '★' * value) for value in range(5, 0, -1)]),
+            'text': forms.Textarea(attrs={'rows': 6, 'placeholder': 'Что понравилось вам и ребёнку?'}),
+            'photo': forms.FileInput(attrs={'accept': 'image/jpeg,image/png,image/webp'}),
+            'video': forms.FileInput(attrs={'accept': 'video/mp4,video/webm,.mp4,.webm'}),
+        }
+        help_texts = {
+            'photo': 'Необязательно. JPEG, PNG или WebP до 10 МБ.',
+            'video': 'Необязательно. MP4 или WebM до 500 МБ.',
+        }
+
+    def clean_website(self):
+        if self.cleaned_data.get('website'):
+            raise forms.ValidationError('Не удалось отправить форму.')
+        return ''

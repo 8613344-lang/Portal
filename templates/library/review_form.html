@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block title %}Оставить отзыв · Книги рядом{% endblock %}
+{% block content %}
+<section class="section review-form-page">
+  {% if unavailable %}
+    <div class="review-form-card review-link-finished"><span class="success-mark">✓</span><p class="eyebrow">ССЫЛКА УЖЕ ИСПОЛЬЗОВАНА ИЛИ НЕДОСТУПНА</p><h1>Спасибо за внимание</h1><p>Отзыв по этой персональной ссылке уже отправлен, срок ссылки закончился или администратор её отключил.</p><a class="button secondary" href="{% url 'home' %}">На главную</a></div>
+  {% else %}
+    <header class="review-form-intro"><p class="eyebrow">ВАШЕ МНЕНИЕ ПОМОЖЕТ ДРУГИМ РОДИТЕЛЯМ</p><h1>Расскажите о вашей книге</h1><p>Поделитесь впечатлениями семьи. Фото и видео можно добавить по желанию. Отзыв появится на сайте только после проверки.</p>{% if review_book %}<span>Книга: «{{ review_book.title }}»</span>{% endif %}</header>
+    <form method="post" enctype="multipart/form-data" class="review-form-card" novalidate>{% csrf_token %}
+      {% if form.non_field_errors %}<div class="form-errors" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+      <div class="form-field">{{ form.author_name.label_tag }}{{ form.author_name }}{{ form.author_name.errors }}</div>
+      <fieldset class="review-rating-field"><legend>{{ form.rating.label }}</legend>{{ form.rating }}{{ form.rating.errors }}</fieldset>
+      <div class="form-field">{{ form.text.label_tag }}{{ form.text }}{{ form.text.errors }}</div>
+      <div class="review-upload-grid"><div class="form-field">{{ form.photo.label_tag }}{{ form.photo }}<small>{{ form.photo.help_text }}</small>{{ form.photo.errors }}</div><div class="form-field">{{ form.video.label_tag }}{{ form.video }}<small>{{ form.video.help_text }}</small>{{ form.video.errors }}</div></div>
+      {{ form.website }}
+      <div class="review-consent">{{ form.publication_consent }}{{ form.publication_consent.label_tag }}{{ form.publication_consent.errors }}<p>Перед отправкой ознакомьтесь с <a href="{% url 'legal-document' 'policy' %}" target="_blank" rel="noopener">политикой обработки персональных данных</a>.</p></div>
+      <button class="button primary" type="submit">Отправить отзыв</button><p class="muted">Публикация выполняется после модерации.</p>
+    </form>
+  {% endif %}
+</section>
+{% endblock %}

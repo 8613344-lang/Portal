@@ -9,7 +9,8 @@ from django.contrib.auth.forms import UserChangeForm
 from django.urls import reverse
 from .models import Book, BookPage, BookAccess, Order, NotificationRecipient, Notification
 from .models import UserAgreement, HomepagePromotion, AudioPreview, BookVideo, HomepageItem, PageVisit
-from .models import BookTariff, LegalDocument, OrderFunnelEvent, HiddenVideo, PrintedBookExample
+from .models import (BookTariff, LegalDocument, OrderFunnelEvent, HiddenVideo, PrintedBookExample,
+                     ReviewInvitation, CustomerReview)
 from .forms import BookAdminForm
 from .commerce import mark_orders
 
@@ -190,6 +191,84 @@ class PrintedBookExampleAdmin(admin.ModelAdmin):
 
     def view_on_site(self, obj): return reverse('paper-books')
 
+
+@admin.register(ReviewInvitation)
+class ReviewInvitationAdmin(admin.ModelAdmin):
+    list_display = ['customer_name', 'order', 'book', 'availability', 'expires_at', 'used_at', 'created_at']
+    list_filter = ['active', 'expires_at', 'used_at']
+    search_fields = ['customer_name', 'order__parent_name', 'order__email', 'book__title']
+    autocomplete_fields = ['book', 'order']
+    readonly_fields = ['personal_link', 'used_at', 'created_at']
+    fields = ['customer_name', 'order', 'book', 'active', 'expires_at', 'personal_link', 'used_at', 'created_at']
+    actions = ['rotate_unused_links']
+
+    @admin.display(boolean=True, description='Можно отправить отзыв')
+    def availability(self, obj): return obj.available
+
+    @admin.display(description='Индивидуальная ссылка')
+    def personal_link(self, obj):
+        if not obj or not obj.pk:
+            return 'Ссылка появится после сохранения.'
+        return format_html('<a href="{}" target="_blank" rel="noopener">{}</a>', obj.share_url, obj.share_url)
+
+    @admin.action(description='Заменить выбранные неиспользованные ссылки', permissions=['change'])
+    def rotate_unused_links(self, request, queryset):
+        count = 0
+        for item in queryset.filter(review__isnull=True):
+            item.token = uuid.uuid4()
+            item.active = True
+            item.save(update_fields=['token', 'active'])
+            count += 1
+        self.message_user(request, f'Создано новых ссылок: {count}. Уже полученные отзывы не изменены.')
+
+
+@admin.register(CustomerReview)
+class CustomerReviewAdmin(admin.ModelAdmin):
+    list_display = ['author_name', 'rating', 'status', 'featured', 'position', 'book_title', 'created_at']
+    list_editable = ['featured', 'position']
+    list_filter = ['status', 'featured', 'rating', 'created_at']
+    search_fields = ['author_name', 'text', 'invitation__book__title', 'invitation__order__parent_name']
+    readonly_fields = ['invitation', 'author_name', 'rating', 'text', 'photo_preview', 'video_preview',
+                       'publication_consent', 'created_at', 'published_at']
+    fields = [('status', 'featured', 'position'), 'invitation', 'author_name', 'rating', 'text',
+              'photo_preview', 'video_preview', 'publication_consent', 'admin_note', 'created_at', 'published_at']
+    actions = ['publish_reviews', 'reject_reviews']
+
+    def has_add_permission(self, request): return False
+
+    @admin.display(description='Книга')
+    def book_title(self, obj): return obj.book or '—'
+
+    @admin.display(description='Фото')
+    def photo_preview(self, obj):
+        if not obj or not obj.photo: return 'Не прикреплено'
+        return format_html('<a href="{}" target="_blank" rel="noopener">Открыть фото</a>', obj.photo.url)
+
+    @admin.display(description='Видео')
+    def video_preview(self, obj):
+        if not obj or not obj.video: return 'Не прикреплено'
+        url = reverse('review-video', args=[obj.pk])
+        return format_html('<a href="{}" target="_blank" rel="noopener">Открыть видео</a>', url)
+
+    @admin.action(description='Опубликовать выбранные отзывы', permissions=['change'])
+    def publish_reviews(self, request, queryset):
+        count = 0
+        for item in queryset.filter(publication_consent=True):
+            item.status = CustomerReview.Status.PUBLISHED
+            item.save(update_fields=['status', 'published_at'])
+            count += 1
+        self.message_user(request, f'Опубликовано отзывов: {count}. Отзывы без согласия пропущены.')
+
+    @admin.action(description='Отклонить выбранные отзывы', permissions=['change'])
+    def reject_reviews(self, request, queryset):
+        count = 0
+        for item in queryset:
+            item.status = CustomerReview.Status.REJECTED
+            item.featured = False
+            item.save(update_fields=['status', 'featured', 'published_at'])
+            count += 1
+        self.message_user(request, f'Отклонено отзывов: {count}.')
+
 @admin.register(BookAccess)
 class AccessAdmin(admin.ModelAdmin):
     list_display = ['book', 'user', 'created_at']
@@ -203,7 +282,7 @@ class OrderAdmin(admin.ModelAdmin):
     search_fields = ['parent_name', 'email', 'child_name', 'id']
     autocomplete_fields = ['book', 'user', 'manager']
     readonly_fields = ['id', 'submission_key', 'created_at', 'consent', 'consent_version', 'pricing_details', 'qualified_at', 'paid_at']
-    actions = ['grant_book_access', 'qualify_orders', 'confirm_payment']
+    actions = ['grant_book_access', 'qualify_orders', 'confirm_payment', 'create_review_invitations']
 
     @admin.display(description='Выбранный тариф и доплаты, ₽')
     def pricing_details(self, obj):
@@ -228,6 +307,21 @@ class OrderAdmin(admin.ModelAdmin):
             _, created = BookAccess.objects.get_or_create(user=order.user, book=order.book)
             count += int(created)
         self.message_user(request, f'Выдано доступов: {count}. Книги также должны быть опубликованы.')
+
+    @admin.action(description='Создать индивидуальные ссылки для отзывов', permissions=['change'])
+    def create_review_invitations(self, request, queryset):
+        if not request.user.has_perm('library.add_reviewinvitation'):
+            self.message_user(request, 'Нет права создавать ссылки для отзывов.', level='ERROR')
+            return
+        created = []
+        for order in queryset:
+            ReviewInvitation.objects.filter(order=order, review__isnull=True).update(active=False)
+            created.append(ReviewInvitation.objects.create(
+                order=order, book=order.book, customer_name=order.parent_name))
+        if len(created) == 1:
+            self.message_user(request, format_html('Ссылка создана: <a href="{}">{}</a>', created[0].share_url, created[0].share_url))
+        else:
+            self.message_user(request, f'Создано ссылок: {len(created)}. Они доступны в разделе «Ссылки для отзывов».')
 
 @admin.register(NotificationRecipient)
 class RecipientAdmin(admin.ModelAdmin):
